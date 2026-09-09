@@ -17,6 +17,9 @@ generateRouter.post('/generate', async (req, res) => {
     res.json(response)
   } catch (err) {
     console.error('Gemini generation failed:', err)
-    res.status(502).json({ error: 'MindTip hit a snag generating a response. Try that again.' })
+    // TEMPORARY: real detail included for diagnosis — revert to a plain
+    // generic message once the underlying cause is fixed.
+    const detail = err instanceof Error ? err.message : String(err)
+    res.status(502).json({ error: 'MindTip hit a snag generating a response. Try that again.', detail })
   }
 })
