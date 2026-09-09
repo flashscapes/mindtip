@@ -92,3 +92,5 @@ memories start at a flat confidence score and never adjust. Feeding
 👍/👎 on a tip back into a memory's confidence is what lets the app learn
 that a stated preference ("I like meditation") isn't the same as an
 observed effective strategy (section 27).
+
+<!-- Claude push access verified 2026-09-09T17:09:04Z -->
