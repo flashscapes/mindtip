@@ -29,6 +29,15 @@ export function Home({ profile, onStart }: HomeProps) {
     <div className="min-h-dvh bg-canvas flex flex-col px-8 py-16 max-w-sm mx-auto">
       <p className="font-sans text-[13px] tracking-[0.08em] text-mist">MindTip</p>
 
+      {/* TEMPORARY — remove once memory extraction is confirmed working. Placed
+          at the very top so it's visible with zero scrolling. */}
+      <div className="mt-2 mb-4 text-[11px] text-bronze bg-panel/80 rounded-lg px-3 py-2">
+        🔧 {storedMemories.length} memor{storedMemories.length === 1 ? 'y' : 'ies'} stored
+        {storedMemories.map(m => (
+          <div key={m.id}>• [{m.type}] {m.content}</div>
+        ))}
+      </div>
+
       <div className="flex-1 flex flex-col justify-center -mt-8">
         <h1 className="font-display font-light text-[30px] leading-snug text-ivory mb-10 text-center">
           How are you today{name}?
@@ -51,14 +60,6 @@ export function Home({ profile, onStart }: HomeProps) {
           style={{ borderBottom: '1px solid rgba(37,56,58,0.14)' }}
         />
       </form>
-
-      {/* TEMPORARY — remove once memory extraction is confirmed working. */}
-      <div className="mt-6 pt-4 text-[10px] text-mist/70" style={{ borderTop: '1px solid rgba(37,56,58,0.1)' }}>
-        🔧 {storedMemories.length} memor{storedMemories.length === 1 ? 'y' : 'ies'} stored:
-        {storedMemories.map(m => (
-          <div key={m.id}>• [{m.type}, {m.confidence}] {m.content}</div>
-        ))}
-      </div>
     </div>
   )
 }
