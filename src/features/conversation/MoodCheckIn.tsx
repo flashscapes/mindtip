@@ -36,13 +36,30 @@ export function MoodCheckIn({ onSubmit }: MoodCheckInProps) {
   const index = value - 1
   const label = MOOD_LABELS[index]
 
-  // 0 (worst) to 1 (best) — drives both the face expression and its color.
+  // 0 (worst) to 1 (best) — drives the eyebrow/mouth expression and face color.
   const t = (value - MIN) / (MAX - MIN)
+  const expression = t - 0.5 // -0.5 (very low) to +0.5 (very good), 0 = neutral
 
-  // Mouth curves from a deep frown (t=0) through flat (t=0.5) to a broad
-  // smile (t=1). Control-point Y drives the curvature direction/amount.
-  const mouthControlY = 68 + (1 - t) * 22 - t * 14
-  const mouthPath = `M 74 74 Q 100 ${mouthControlY} 126 74`
+  // Mouth: corners are fixed at y=118; the curve's midpoint moves relative
+  // to them. Pushing the midpoint below the corners (larger y) bends the
+  // ends upward into a smile; pushing it above the corners (smaller y)
+  // droops the ends into a frown. Amplitude scales with how far from
+  // neutral the mood is, so "just okay" reads as a flat, level mouth.
+  const mouthMidY = 118 + expression * 70
+  const mouthPath = `M 72 118 Q 100 ${mouthMidY} 128 118`
+
+  // Eyebrows sit above the eyes near the top of the face and use the same
+  // directional logic at a much smaller amplitude: they arch up and knit
+  // together for a worried look at low mood, and relax downward at high
+  // mood — subtle, but reads as furrowed vs. relaxed at a glance.
+  const browMidY = 84 - expression * 10
+  const leftBrow = `M 66 84 Q 77 ${browMidY} 88 84`
+  const rightBrow = `M 112 84 Q 123 ${browMidY} 134 84`
+
+  // Simple closed eyes sit just below the brows, unaffected by mood — the
+  // brows and mouth carry the expression.
+  const leftEye = 'M 70 98 Q 77 102 84 98'
+  const rightEye = 'M 116 98 Q 123 102 130 98'
 
   // Face color shifts from a cooler, muted aqua at low mood to a warmer,
   // brighter aqua-gold blend at high mood — stays in the app's palette
@@ -60,10 +77,11 @@ export function MoodCheckIn({ onSubmit }: MoodCheckInProps) {
           </radialGradient>
         </defs>
         <circle cx="100" cy="100" r="72" fill="url(#moodFace)" />
-        {/* Closed, curved eyes in every state — calm rather than cartoonish */}
-        <path d="M 68 88 Q 78 80 88 88" stroke="#25383A" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.55" />
-        <path d="M 112 88 Q 122 80 132 88" stroke="#25383A" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.55" />
-        <path d={mouthPath} stroke="#25383A" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.55" />
+        <path d={leftBrow} stroke="#25383A" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.6" />
+        <path d={rightBrow} stroke="#25383A" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.6" />
+        <path d={leftEye} stroke="#25383A" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.55" />
+        <path d={rightEye} stroke="#25383A" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.55" />
+        <path d={mouthPath} stroke="#25383A" strokeWidth="3.5" strokeLinecap="round" fill="none" opacity="0.6" />
       </svg>
 
       <p className="font-display font-light text-[22px] text-ivory mt-6 mb-1">{label}</p>
