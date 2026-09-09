@@ -57,9 +57,10 @@ async function speakText(text: string): Promise<void> {
 
 interface VadOptions {
   onSpeechStart?: () => void;
-  onSpeechEnd?: (audioBlob: Blob) => void;
+  onSpeechEnd?: (audioBlob: Blob, durationMs: number) => void;
   silenceThreshold?: number; // amplitude (0-128 scale) below which is "quiet"
   silenceDurationMs?: number; // how long quiet must persist before ending the turn
+  minSpeechDurationMs?: number; // how long amplitude must stay elevated before it counts as real speech, not a blip
 }
 
 class VoiceActivityDetector {
@@ -69,6 +70,8 @@ class VoiceActivityDetector {
   private recorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
   private speaking = false;
+  private aboveThresholdSince: number | null = null;
+  private speechStartedAt: number | null = null;
   private silenceStart: number | null = null;
   private rafId: number | null = null;
   private opts: Required<VadOptions>;
@@ -79,6 +82,7 @@ class VoiceActivityDetector {
       onSpeechEnd: opts.onSpeechEnd ?? (() => {}),
       silenceThreshold: opts.silenceThreshold ?? 12,
       silenceDurationMs: opts.silenceDurationMs ?? 1200,
+      minSpeechDurationMs: opts.minSpeechDurationMs ?? 250,
     };
   }
 
@@ -96,6 +100,8 @@ class VoiceActivityDetector {
       if (e.data.size > 0) this.chunks.push(e.data);
     };
     this.speaking = false;
+    this.aboveThresholdSince = null;
+    this.speechStartedAt = null;
     this.silenceStart = null;
     this.recorder.start();
     this.monitor();
@@ -115,17 +121,27 @@ class VoiceActivityDetector {
     const now = performance.now();
 
     if (rms > this.opts.silenceThreshold) {
-      if (!this.speaking) {
+      if (this.aboveThresholdSince === null) {
+        this.aboveThresholdSince = now;
+      }
+      // Only count this as real speech once amplitude has stayed elevated
+      // continuously for minSpeechDurationMs — a single loud frame (a tap,
+      // a click, a stray noise) shouldn't be enough on its own.
+      if (!this.speaking && now - this.aboveThresholdSince > this.opts.minSpeechDurationMs) {
         this.speaking = true;
+        this.speechStartedAt = this.aboveThresholdSince;
         this.opts.onSpeechStart();
       }
       this.silenceStart = null;
-    } else if (this.speaking) {
-      if (this.silenceStart === null) {
-        this.silenceStart = now;
-      } else if (now - this.silenceStart > this.opts.silenceDurationMs) {
-        this.finishTurn();
-        return;
+    } else {
+      this.aboveThresholdSince = null;
+      if (this.speaking) {
+        if (this.silenceStart === null) {
+          this.silenceStart = now;
+        } else if (now - this.silenceStart > this.opts.silenceDurationMs) {
+          this.finishTurn();
+          return;
+        }
       }
     }
     this.rafId = requestAnimationFrame(this.monitor);
@@ -133,10 +149,11 @@ class VoiceActivityDetector {
 
   private finishTurn(): void {
     if (!this.recorder) return;
+    const durationMs = this.speechStartedAt !== null ? performance.now() - this.speechStartedAt : 0;
     const recorder = this.recorder;
     recorder.onstop = () => {
       const blob = new Blob(this.chunks, { type: 'audio/webm' });
-      this.opts.onSpeechEnd(blob);
+      this.opts.onSpeechEnd(blob, durationMs);
     };
     recorder.stop();
     this.teardown();
@@ -184,7 +201,17 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     setState('listening');
 
     const vad = new VoiceActivityDetector({
-      onSpeechEnd: async (blob) => {
+      onSpeechEnd: async (blob, durationMs) => {
+        // A clip shorter than this is almost certainly a noise blip, not a
+        // word — sending it to Whisper risks a hallucinated transcription
+        // (a known failure mode on near-silent audio), which would then get
+        // treated as a real reply and loop the conversation on nothing said.
+        const MIN_CLIP_MS = 400;
+        if (durationMs < MIN_CLIP_MS) {
+          startListening();
+          return;
+        }
+
         setState('transcribing');
         try {
           const res = await fetch('/api/transcribe', { method: 'POST', body: blob });
