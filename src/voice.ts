@@ -71,6 +71,7 @@ async function speakText(text: string, onDebug?: (msg: string) => void): Promise
 interface VadOptions {
   onSpeechStart?: () => void;
   onSpeechEnd?: (audioBlob: Blob, durationMs: number) => void;
+  onDebug?: (msg: string) => void;
   silenceThreshold?: number; // amplitude (0-128 scale) below which is "quiet"
   silenceDurationMs?: number; // how long quiet must persist before ending the turn
   minSpeechDurationMs?: number; // how long amplitude must stay elevated before it counts as real speech, not a blip
@@ -87,12 +88,14 @@ class VoiceActivityDetector {
   private speechStartedAt: number | null = null;
   private silenceStart: number | null = null;
   private rafId: number | null = null;
+  private lastDebugAt = 0;
   private opts: Required<VadOptions>;
 
   constructor(opts: VadOptions = {}) {
     this.opts = {
       onSpeechStart: opts.onSpeechStart ?? (() => {}),
       onSpeechEnd: opts.onSpeechEnd ?? (() => {}),
+      onDebug: opts.onDebug ?? (() => {}),
       silenceThreshold: opts.silenceThreshold ?? 12,
       silenceDurationMs: opts.silenceDurationMs ?? 1200,
       minSpeechDurationMs: opts.minSpeechDurationMs ?? 250,
@@ -101,13 +104,16 @@ class VoiceActivityDetector {
 
   async start(): Promise<void> {
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    this.opts.onDebug(`Mic stream acquired: ${this.stream.getAudioTracks().length} audio track(s), enabled=${this.stream.getAudioTracks()[0]?.enabled}`);
     this.audioCtx = new AudioContext();
     const source = this.audioCtx.createMediaStreamSource(this.stream);
     this.analyser = this.audioCtx.createAnalyser();
     this.analyser.fftSize = 512;
     source.connect(this.analyser);
 
-    this.recorder = new MediaRecorder(this.stream, { mimeType: 'audio/webm' });
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+    this.opts.onDebug(`Using MediaRecorder mimeType: "${mimeType || '(browser default)'}"`);
+    this.recorder = new MediaRecorder(this.stream, mimeType ? { mimeType } : undefined);
     this.chunks = [];
     this.recorder.ondataavailable = (e) => {
       if (e.data.size > 0) this.chunks.push(e.data);
@@ -117,6 +123,7 @@ class VoiceActivityDetector {
     this.speechStartedAt = null;
     this.silenceStart = null;
     this.recorder.start();
+    this.lastDebugAt = 0;
     this.monitor();
   }
 
@@ -133,6 +140,12 @@ class VoiceActivityDetector {
     const rms = Math.sqrt(sumSquares / data.length);
     const now = performance.now();
 
+    // Throttled so we can see live mic levels without flooding — every ~500ms.
+    if (now - this.lastDebugAt > 500) {
+      this.lastDebugAt = now;
+      this.opts.onDebug(`Mic level: ${rms.toFixed(1)} (threshold ${this.opts.silenceThreshold}), speaking=${this.speaking}`);
+    }
+
     if (rms > this.opts.silenceThreshold) {
       if (this.aboveThresholdSince === null) {
         this.aboveThresholdSince = now;
@@ -143,6 +156,7 @@ class VoiceActivityDetector {
       if (!this.speaking && now - this.aboveThresholdSince > this.opts.minSpeechDurationMs) {
         this.speaking = true;
         this.speechStartedAt = this.aboveThresholdSince;
+        this.opts.onDebug('Speech detected — recording turn');
         this.opts.onSpeechStart();
       }
       this.silenceStart = null;
@@ -152,6 +166,7 @@ class VoiceActivityDetector {
         if (this.silenceStart === null) {
           this.silenceStart = now;
         } else if (now - this.silenceStart > this.opts.silenceDurationMs) {
+          this.opts.onDebug('Silence held long enough — ending turn');
           this.finishTurn();
           return;
         }
@@ -163,9 +178,11 @@ class VoiceActivityDetector {
   private finishTurn(): void {
     if (!this.recorder) return;
     const durationMs = this.speechStartedAt !== null ? performance.now() - this.speechStartedAt : 0;
+    this.opts.onDebug(`Turn finished: ${durationMs.toFixed(0)}ms of speech, ${this.chunks.length} chunk(s) recorded`);
     const recorder = this.recorder;
     recorder.onstop = () => {
       const blob = new Blob(this.chunks, { type: 'audio/webm' });
+      this.opts.onDebug(`Recorded blob: ${blob.size} bytes`);
       this.opts.onSpeechEnd(blob, durationMs);
     };
     recorder.stop();
@@ -213,8 +230,10 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
   const startListening = useCallback(() => {
     if (!enabledRef.current) return;
     setState('listening');
+    setDebugLog('Listening for your voice…');
 
     const vad = new VoiceActivityDetector({
+      onDebug: setDebugLog,
       onSpeechEnd: async (blob, durationMs) => {
         // A clip shorter than this is almost certainly a noise blip, not a
         // word — sending it to Whisper risks a hallucinated transcription
@@ -222,20 +241,30 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
         // treated as a real reply and loop the conversation on nothing said.
         const MIN_CLIP_MS = 400;
         if (durationMs < MIN_CLIP_MS) {
+          setDebugLog(`Clip too short (${durationMs.toFixed(0)}ms) — listening again`);
           startListening();
           return;
         }
 
         setState('transcribing');
+        setDebugLog('Sending audio to /api/transcribe…');
         try {
           const res = await fetch('/api/transcribe', { method: 'POST', body: blob });
+          if (!res.ok) {
+            const body = await res.text().catch(() => '');
+            setDebugLog(`Transcribe failed: HTTP ${res.status} — ${body.slice(0, 200)}`);
+            startListening();
+            return;
+          }
           const { text } = (await res.json()) as { text?: string };
+          setDebugLog(`Transcribed: "${text ?? '(empty)'}"`);
           if (text && text.trim()) {
             onUserSpeech(text.trim());
           } else {
             startListening();
           }
         } catch (err) {
+          setDebugLog(`Transcription error: ${err instanceof Error ? err.message : String(err)}`);
           console.error('Transcription failed:', err);
           startListening();
         }
@@ -244,6 +273,7 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
 
     vadRef.current = vad;
     vad.start().catch((err) => {
+      setDebugLog(`Mic access failed: ${err instanceof Error ? err.message : String(err)}`);
       console.error('Mic access failed:', err);
       setState('idle');
     });
