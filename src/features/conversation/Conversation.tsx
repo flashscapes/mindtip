@@ -58,12 +58,31 @@ export function Conversation({ profile, initialMessage, autoEnableVoice, onExit 
 
     setIsThinking(true)
     const relevantMemories = memory.getRelevant(trimmed)
-    const response = await ai.generateResponse({
-      profile,
-      relevantMemories,
-      recentMessages: messages.slice(-6),
-      currentMessage: trimmed
-    })
+    let response
+    try {
+      response = await ai.generateResponse({
+        profile,
+        relevantMemories,
+        recentMessages: messages.slice(-6),
+        currentMessage: trimmed
+      })
+    } catch (err) {
+      setIsThinking(false)
+      const errMsg = err instanceof Error ? err.message : String(err)
+      console.error('AI response generation failed:', err)
+      // TEMPORARY — surfacing the raw error in-chat for diagnosis; revert to
+      // a plain friendly message once the underlying failure is understood.
+      setMessages(prev => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: `🔧 MindTip hit an error generating a response: ${errMsg}`,
+          createdAt: new Date().toISOString()
+        }
+      ])
+      return
+    }
     setIsThinking(false)
 
     setMessages(prev => [
