@@ -15,6 +15,7 @@ export function Home({ profile, onStart }: HomeProps) {
   const [text, setText] = useState('')
   const name = profile.preferredName ? `, ${profile.preferredName}` : ''
   const storedMemories = new LocalMemoryService().getAll()
+  const extractionDebug = localStorage.getItem('mindtip_extraction_debug')
 
   const handleMoodSubmit = (message: string) => {
     // Must be called synchronously inside this real tap to satisfy the
@@ -36,6 +37,7 @@ export function Home({ profile, onStart }: HomeProps) {
         {storedMemories.map(m => (
           <div key={m.id}>• [{m.type}] {m.content}</div>
         ))}
+        {extractionDebug && <div className="mt-1 text-mist">Last extraction: {extractionDebug}</div>}
       </div>
 
       <div className="flex-1 flex flex-col justify-center -mt-8">

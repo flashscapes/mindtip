@@ -116,10 +116,14 @@ export function Conversation({ profile, initialMessage, autoEnableVoice, onExit 
    * the server route itself fails soft.
    */
   const extractMemoriesFromThisConversation = async () => {
-    if (messages.length < 2) return // nothing substantive happened yet
+    if (messages.length < 2) {
+      localStorage.setItem('mindtip_extraction_debug', `Skipped: only ${messages.length} message(s), need 2+`)
+      return
+    }
 
     try {
       const result = await memoryExtractor.extract({ messages, profile })
+      localStorage.setItem('mindtip_extraction_debug', `Extractor returned: ${JSON.stringify(result)}`)
       const existingContent = memory.getAll().map(m => m.content.trim().toLowerCase())
 
       for (const item of result.memories) {
@@ -129,6 +133,8 @@ export function Conversation({ profile, initialMessage, autoEnableVoice, onExit 
         existingContent.push(key)
       }
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      localStorage.setItem('mindtip_extraction_debug', `Extraction FAILED: ${msg}`)
       console.error('Memory extraction failed:', err)
     }
   }
