@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { UserProfile } from '@/types'
 import { unlockAudio } from '@/voice'
+import { LocalMemoryService } from '@/services/memory/MemoryService'
 import { MoodCheckIn } from './MoodCheckIn'
 
 interface HomeProps {
@@ -13,6 +14,7 @@ interface HomeProps {
 export function Home({ profile, onStart }: HomeProps) {
   const [text, setText] = useState('')
   const name = profile.preferredName ? `, ${profile.preferredName}` : ''
+  const storedMemories = new LocalMemoryService().getAll()
 
   const handleMoodSubmit = (message: string) => {
     // Must be called synchronously inside this real tap to satisfy the
@@ -49,6 +51,14 @@ export function Home({ profile, onStart }: HomeProps) {
           style={{ borderBottom: '1px solid rgba(37,56,58,0.14)' }}
         />
       </form>
+
+      {/* TEMPORARY — remove once memory extraction is confirmed working. */}
+      <div className="mt-6 pt-4 text-[10px] text-mist/70" style={{ borderTop: '1px solid rgba(37,56,58,0.1)' }}>
+        🔧 {storedMemories.length} memor{storedMemories.length === 1 ? 'y' : 'ies'} stored:
+        {storedMemories.map(m => (
+          <div key={m.id}>• [{m.type}, {m.confidence}] {m.content}</div>
+        ))}
+      </div>
     </div>
   )
 }
