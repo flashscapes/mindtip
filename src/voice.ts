@@ -40,16 +40,25 @@ async function speakText(text: string): Promise<void> {
   const res = await fetch(`/api/speak?text=${encodeURIComponent(text)}`);
   if (!res.ok) throw new Error(`TTS fetch failed: ${res.status}`);
   const blob = await res.blob();
+  console.log(`[voice] TTS response: ${blob.size} bytes, type ${blob.type}`);
+  if (blob.size === 0) throw new Error('TTS response was empty (0 bytes)');
   const url = URL.createObjectURL(blob);
 
   if (requestId !== currentRequestId) return; // superseded while fetching
 
   const audio = getSharedAudio();
+  console.log(`[voice] audio element state before play: muted=${audio.muted}, volume=${audio.volume}`);
   audio.src = url;
   await new Promise<void>((resolve, reject) => {
-    audio.onended = () => resolve();
-    audio.onerror = () => reject(new Error('Audio playback failed'));
-    audio.play().catch(reject);
+    audio.onended = () => {
+      console.log('[voice] playback ended normally');
+      resolve();
+    };
+    audio.onerror = () => reject(new Error(`Audio playback failed: ${audio.error?.message ?? 'unknown'}`));
+    audio
+      .play()
+      .then(() => console.log('[voice] play() promise resolved — audio should be audible now'))
+      .catch(reject);
   });
 }
 
