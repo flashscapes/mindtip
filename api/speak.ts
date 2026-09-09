@@ -1,12 +1,15 @@
 // DESTINATION: api/speak.ts  (repo root, alongside your existing api/[...path].ts)
 //
-// Matches RoadTip's live api/speak.js exactly: GET request, text via query
-// string, raw MP3 bytes back. Kept as its own file (not folded into your
-// Express catch-all) so a slow synthesis never risks your Gemini endpoint's
-// timeout budget.
+// Matches RoadTip's live api/speak.js: GET request, text via query string,
+// OpenAI TTS (shimmer voice), raw MP3 bytes back. Kept as its own file
+// (not folded into your Express catch-all) so a slow synthesis never
+// risks your Gemini endpoint's timeout budget.
+//
+// Requires env var: OPENAI_API_KEY (same account/key type RoadTip uses
+// for its own speak endpoint — separate from GROQ_API_KEY, which only
+// powers transcription).
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { EdgeTTS } from 'edge-tts-universal';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
@@ -22,9 +25,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const tts = new EdgeTTS(text, 'en-US-EmmaMultilingualNeural');
-    const result = await tts.synthesize();
-    const audioBuffer = Buffer.from(await result.audio.arrayBuffer());
+    const openaiRes = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'tts-1',
+        voice: 'shimmer',
+        input: text,
+        response_format: 'mp3'
+      })
+    });
+
+    if (!openaiRes.ok) {
+      const errText = await openaiRes.text();
+      console.error('OpenAI TTS error:', errText);
+      res.status(502).json({ error: 'Speech synthesis failed' });
+      return;
+    }
+
+    const audioBuffer = Buffer.from(await openaiRes.arrayBuffer());
 
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Cache-Control', 'no-store');
