@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Message, UserProfile } from '@/types'
 import { createAIProvider } from '@/services/ai'
 import { LocalMemoryService } from '@/services/memory/MemoryService'
+import { createMemoryExtractor } from '@/services/memory'
 import { SafetyService } from '@/services/safety/SafetyService'
 import { useVoiceConversation } from '@/voice'
 import { ChatBubble } from './ChatBubble'
@@ -20,6 +21,7 @@ interface ConversationProps {
 export function Conversation({ profile, initialMessage, autoEnableVoice, onExit }: ConversationProps) {
   const ai = useMemo(() => createAIProvider(), [])
   const memory = useMemo(() => new LocalMemoryService(), [])
+  const memoryExtractor = useMemo(() => createMemoryExtractor(), [])
   const safety = useMemo(() => new SafetyService(), [])
 
   const [messages, setMessages] = useState<Message[]>([])
@@ -84,6 +86,39 @@ export function Conversation({ profile, initialMessage, autoEnableVoice, onExit 
 
   const voice = useVoiceConversation({ onUserSpeech: send })
 
+  /**
+   * Best-effort background enrichment, run once when the user leaves this
+   * conversation: hands the transcript to the memory extractor (a real
+   * model call in production, a lightweight heuristic in mock mode — see
+   * services/memory/index.ts) and persists whatever patterns, triggers, or
+   * effective/ineffective strategies it finds. Deliberately fire-and-forget
+   * — extraction never blocks or delays actually exiting the conversation,
+   * and a failure here is silent to the user (logged only), matching how
+   * the server route itself fails soft.
+   */
+  const extractMemoriesFromThisConversation = async () => {
+    if (messages.length < 2) return // nothing substantive happened yet
+
+    try {
+      const result = await memoryExtractor.extract({ messages, profile })
+      const existingContent = memory.getAll().map(m => m.content.trim().toLowerCase())
+
+      for (const item of result.memories) {
+        const key = item.content.trim().toLowerCase()
+        if (!key || existingContent.includes(key)) continue // avoid duplicate buildup across sessions
+        memory.remember(item.type, item.content, item.confidence, 'conversation')
+        existingContent.push(key)
+      }
+    } catch (err) {
+      console.error('Memory extraction failed:', err)
+    }
+  }
+
+  const handleExit = () => {
+    void extractMemoriesFromThisConversation()
+    onExit()
+  }
+
   useEffect(() => {
     if (started.current) return
     started.current = true
@@ -122,7 +157,7 @@ export function Conversation({ profile, initialMessage, autoEnableVoice, onExit 
           >
             {voice.enabled ? (voice.state === 'idle' ? 'Voice on' : voice.state) : 'Voice off'}
           </button>
-          <button onClick={onExit} className="text-[13px] text-mist hover:text-bronze transition-colors duration-300">Close</button>
+          <button onClick={handleExit} className="text-[13px] text-mist hover:text-bronze transition-colors duration-300">Close</button>
         </div>
       </header>
 
