@@ -35,29 +35,33 @@ export function unlockAudio(): void {
 let currentRequestId = 0;
 
 /** Fetches speech for `text` from /api/speak, plays it, resolves when playback ends. */
-async function speakText(text: string): Promise<void> {
+async function speakText(text: string, onDebug?: (msg: string) => void): Promise<void> {
   const requestId = ++currentRequestId;
+  onDebug?.('Requesting speech from /api/speak…');
   const res = await fetch(`/api/speak?text=${encodeURIComponent(text)}`);
-  if (!res.ok) throw new Error(`TTS fetch failed: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`TTS fetch failed: HTTP ${res.status} — ${body.slice(0, 200)}`);
+  }
   const blob = await res.blob();
-  console.log(`[voice] TTS response: ${blob.size} bytes, type ${blob.type}`);
+  onDebug?.(`Received ${blob.size} bytes (${blob.type || 'no content-type'})`);
   if (blob.size === 0) throw new Error('TTS response was empty (0 bytes)');
   const url = URL.createObjectURL(blob);
 
   if (requestId !== currentRequestId) return; // superseded while fetching
 
   const audio = getSharedAudio();
-  console.log(`[voice] audio element state before play: muted=${audio.muted}, volume=${audio.volume}`);
+  onDebug?.(`Audio element before play: muted=${audio.muted}, volume=${audio.volume}`);
   audio.src = url;
   await new Promise<void>((resolve, reject) => {
     audio.onended = () => {
-      console.log('[voice] playback ended normally');
+      onDebug?.('Playback ended normally');
       resolve();
     };
     audio.onerror = () => reject(new Error(`Audio playback failed: ${audio.error?.message ?? 'unknown'}`));
     audio
       .play()
-      .then(() => console.log('[voice] play() promise resolved — audio should be audible now'))
+      .then(() => onDebug?.('play() resolved — should be audible now'))
       .catch(reject);
   });
 }
@@ -202,6 +206,7 @@ interface UseVoiceConversationOptions {
 export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptions) {
   const [state, setState] = useState<ConversationState>('idle');
   const [enabled, setEnabled] = useState(false);
+  const [debugLog, setDebugLog] = useState<string>('');
   const enabledRef = useRef(false);
   const vadRef = useRef<VoiceActivityDetector | null>(null);
 
@@ -246,10 +251,12 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
 
   /** Call once, from a real tap. Grants mic access and unlocks audio for the whole session. */
   const enableVoiceConversation = useCallback(async () => {
+    setDebugLog('Enabling voice: unlocking audio + requesting mic…');
     unlockAudio();
     await navigator.mediaDevices.getUserMedia({ audio: true });
     enabledRef.current = true;
     setEnabled(true);
+    setDebugLog('Voice enabled — mic access granted');
   }, []);
 
   const disableVoiceConversation = useCallback(() => {
@@ -262,11 +269,15 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
   /** Call whenever MindTip has a new response. Auto-starts listening when done speaking. */
   const speakResponse = useCallback(
     async (text: string) => {
-      if (!enabledRef.current) return;
+      if (!enabledRef.current) {
+        setDebugLog('speakResponse called but voice is not enabled — skipped');
+        return;
+      }
       setState('speaking');
       try {
-        await speakText(text);
+        await speakText(text, setDebugLog);
       } catch (err) {
+        setDebugLog(`Error: ${err instanceof Error ? err.message : String(err)}`);
         console.error('Speech playback failed:', err);
       }
       startListening();
@@ -274,5 +285,5 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     [startListening]
   );
 
-  return { state, enabled, enableVoiceConversation, disableVoiceConversation, speakResponse };
+  return { state, enabled, debugLog, enableVoiceConversation, disableVoiceConversation, speakResponse };
 }

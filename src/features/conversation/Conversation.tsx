@@ -126,6 +126,14 @@ export function Conversation({ profile, initialMessage, autoEnableVoice, onExit 
         </div>
       </header>
 
+      {/* TEMPORARY — remove once voice playback is confirmed working. Shows
+          exactly what the TTS pipeline is doing without needing DevTools. */}
+      {voice.debugLog && (
+        <p className="px-8 py-2 text-[11px] text-mist bg-panel/60 break-words">
+          🔧 {voice.debugLog}
+        </p>
+      )}
+
       <div className="flex-1 overflow-y-auto px-8 py-10 flex flex-col gap-6">
         {messages.map(m => (
           <ChatBubble key={m.id} message={m} />
