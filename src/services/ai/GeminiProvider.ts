@@ -15,14 +15,33 @@ import type { AIContext, AIProvider, AIResponse } from './AIProvider'
 export class GeminiProvider implements AIProvider {
   async generateResponse(context: AIContext): Promise<AIResponse> {
     const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
-    const res = await fetch(`${apiBaseUrl}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(context)
-    })
+
+    // A plain fetch with no timeout can hang forever if the server call
+    // stalls rather than erroring — that leaves the UI stuck on "Thinking…"
+    // with nothing to catch. This guarantees it eventually fails visibly.
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 25000)
+
+    let res: Response
+    try {
+      res = await fetch(`${apiBaseUrl}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(context),
+        signal: controller.signal
+      })
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error('Request timed out after 25s — MindTip may be slow to respond right now.')
+      }
+      throw err
+    } finally {
+      clearTimeout(timeoutId)
+    }
 
     if (!res.ok) {
-      throw new Error(`AI request failed with status ${res.status}`)
+      const body = await res.text().catch(() => '')
+      throw new Error(`AI request failed with status ${res.status}${body ? ` — ${body.slice(0, 200)}` : ''}`)
     }
 
     return (await res.json()) as AIResponse

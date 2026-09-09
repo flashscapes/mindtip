@@ -8,6 +8,21 @@ import { Conversation } from '@/features/conversation/Conversation'
 
 type Screen = 'welcome' | 'onboarding' | 'home' | 'conversation'
 
+// Fixed on every screen so we can always tell, at a glance or in a
+// screenshot, whether a given load is actually running the latest deployed
+// code — this app's aggressive PWA caching has repeatedly made that
+// ambiguous otherwise.
+function BuildStamp() {
+  return (
+    <div
+      className="fixed bottom-1 right-2 z-50 font-sans text-[9px] text-mist/50 pointer-events-none select-none"
+      style={{ fontFamily: 'monospace' }}
+    >
+      build {__BUILD_SHA__} · {__BUILD_TIME__.slice(0, 16).replace('T', ' ')}
+    </div>
+  )
+}
+
 export default function App() {
   const { profile, saveProfile } = useUserProfile()
   const [screen, setScreen] = useState<Screen>(profile?.onboardingCompleted ? 'home' : 'welcome')
@@ -25,16 +40,13 @@ export default function App() {
     setScreen('conversation')
   }
 
+  let content
   if (screen === 'welcome') {
-    return <Welcome onComplete={() => setScreen('onboarding')} />
-  }
-
-  if (screen === 'onboarding') {
-    return <Onboarding onComplete={handleOnboardingComplete} />
-  }
-
-  if (screen === 'conversation' && profile) {
-    return (
+    content = <Welcome onComplete={() => setScreen('onboarding')} />
+  } else if (screen === 'onboarding') {
+    content = <Onboarding onComplete={handleOnboardingComplete} />
+  } else if (screen === 'conversation' && profile) {
+    content = (
       <Conversation
         profile={profile}
         initialMessage={initialMessage}
@@ -46,12 +58,17 @@ export default function App() {
         }}
       />
     )
+  } else if (profile) {
+    content = <Home profile={profile} onStart={handleStartConversation} />
+  } else {
+    // Fallback: no profile somehow reached a screen that needs one.
+    content = <Onboarding onComplete={handleOnboardingComplete} />
   }
 
-  if (profile) {
-    return <Home profile={profile} onStart={handleStartConversation} />
-  }
-
-  // Fallback: no profile somehow reached a screen that needs one.
-  return <Onboarding onComplete={handleOnboardingComplete} />
+  return (
+    <>
+      {content}
+      <BuildStamp />
+    </>
+  )
 }
