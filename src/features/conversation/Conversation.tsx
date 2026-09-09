@@ -10,10 +10,14 @@ import { Button } from '@/components/ui/Button'
 interface ConversationProps {
   profile: UserProfile
   initialMessage?: string
+  // When true, hands-free voice is enabled before the first message is
+  // sent — used when the user arrives here via the Home mood check-in,
+  // which already unlocked audio playback during its own tap.
+  autoEnableVoice?: boolean
   onExit: () => void
 }
 
-export function Conversation({ profile, initialMessage, onExit }: ConversationProps) {
+export function Conversation({ profile, initialMessage, autoEnableVoice, onExit }: ConversationProps) {
   const ai = useMemo(() => createAIProvider(), [])
   const memory = useMemo(() => new LocalMemoryService(), [])
   const safety = useMemo(() => new SafetyService(), [])
@@ -81,20 +85,35 @@ export function Conversation({ profile, initialMessage, onExit }: ConversationPr
   const voice = useVoiceConversation({ onUserSpeech: send })
 
   useEffect(() => {
-    if (!started.current && initialMessage) {
-      started.current = true
-      void send(initialMessage)
+    if (started.current) return
+    started.current = true
+
+    const run = async () => {
+      if (autoEnableVoice) {
+        try {
+          // Awaited so `enabledRef` is true by the time `send` below checks
+          // it — that's what makes the spoken response, and the automatic
+          // listen-for-reply afterward, actually happen.
+          await voice.enableVoiceConversation()
+        } catch (err) {
+          console.error('Could not enable hands-free voice automatically:', err)
+        }
+      }
+      if (initialMessage) {
+        void send(initialMessage)
+      }
     }
+    void run()
     // Intentionally runs once on mount to auto-send the message the user
-    // arrived with (e.g. from a Home quick-choice); `send` itself is stable
-    // enough in practice here, and re-running on every identity change would
-    // risk re-sending.
+    // arrived with (e.g. from the Home mood check-in); `send` itself is
+    // stable enough in practice here, and re-running on every identity
+    // change would risk re-sending.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
     <div className="min-h-dvh bg-canvas flex flex-col max-w-md mx-auto">
-      <header className="flex items-center justify-between px-8 py-6" style={{ borderBottom: '1px solid rgba(244,241,234,0.08)' }}>
+      <header className="flex items-center justify-between px-8 py-6" style={{ borderBottom: '1px solid rgba(37,56,58,0.08)' }}>
         <span className="font-sans text-[13px] tracking-[0.08em] text-mist">MindTip</span>
         <div className="flex items-center gap-5">
           <button
@@ -120,14 +139,14 @@ export function Conversation({ profile, initialMessage, onExit }: ConversationPr
           void send(input)
         }}
         className="flex items-center gap-4 px-8 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
-        style={{ borderTop: '1px solid rgba(244,241,234,0.08)' }}
+        style={{ borderTop: '1px solid rgba(37,56,58,0.08)' }}
       >
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
           placeholder="Tell me what's on your mind…"
           className="flex-1 bg-transparent text-[15px] text-ivory placeholder:text-mist outline-none pb-2"
-          style={{ borderBottom: '1px solid rgba(244,241,234,0.14)' }}
+          style={{ borderBottom: '1px solid rgba(37,56,58,0.14)' }}
         />
         <Button type="submit" disabled={!input.trim()}>Send</Button>
       </form>

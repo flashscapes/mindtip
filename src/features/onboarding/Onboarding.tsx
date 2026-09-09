@@ -64,7 +64,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               onChange={e => setPreferredName(e.target.value)}
               placeholder="Optional"
               className="w-full bg-transparent text-[17px] text-ivory placeholder:text-mist/60 outline-none pb-3"
-              style={{ borderBottom: '1px solid rgba(244,241,234,0.14)' }}
+              style={{ borderBottom: '1px solid rgba(37,56,58,0.14)' }}
             />
           </div>
         )}
@@ -88,7 +88,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 <button
                   key={s.value}
                   onClick={() => setSupportStyle(s.value)}
-                  style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(244,241,234,0.08)' }}
+                  style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(37,56,58,0.08)' }}
                   className="w-full text-left py-4"
                 >
                   <p className={`text-[19px] transition-colors duration-300 ${supportStyle === s.value ? 'text-bronze' : 'text-ivory'}`}>{s.label}</p>
@@ -132,7 +132,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               <button
                 onClick={() => setProactiveCheckIns(false)}
                 className="w-full text-left py-4"
-                style={{ borderTop: '1px solid rgba(244,241,234,0.08)' }}
+                style={{ borderTop: '1px solid rgba(37,56,58,0.08)' }}
               >
                 <p className={`text-[19px] transition-colors duration-300 ${proactiveCheckIns === false ? 'text-bronze' : 'text-ivory'}`}>No, only when I reach out</p>
                 <p className="text-[14px] text-mist mt-1">I'll stay quiet until you start a conversation.</p>

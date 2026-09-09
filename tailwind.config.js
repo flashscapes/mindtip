@@ -4,11 +4,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        canvas: '#221A2E',
-        panel: '#211E1A',
-        ivory: '#F4F1EA',
-        mist: '#8F887C',
-        bronze: '#C3A46B'
+        canvas: '#E9F5F3',
+        panel: '#FFFFFF',
+        ivory: '#25383A',
+        mist: '#6C8A8C',
+        bronze: '#B8935A'
       },
       fontFamily: {
         display: ['"Fraunces"', 'serif'],

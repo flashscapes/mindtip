@@ -12,14 +12,16 @@ export default function App() {
   const { profile, saveProfile } = useUserProfile()
   const [screen, setScreen] = useState<Screen>(profile?.onboardingCompleted ? 'home' : 'welcome')
   const [initialMessage, setInitialMessage] = useState<string | undefined>()
+  const [autoVoiceStart, setAutoVoiceStart] = useState(false)
 
   const handleOnboardingComplete = (newProfile: UserProfile) => {
     saveProfile(newProfile)
     setScreen('home')
   }
 
-  const handleStartConversation = (message: string) => {
+  const handleStartConversation = (message: string, autoVoice = false) => {
     setInitialMessage(message)
+    setAutoVoiceStart(autoVoice)
     setScreen('conversation')
   }
 
@@ -36,8 +38,10 @@ export default function App() {
       <Conversation
         profile={profile}
         initialMessage={initialMessage}
+        autoEnableVoice={autoVoiceStart}
         onExit={() => {
           setInitialMessage(undefined)
+          setAutoVoiceStart(false)
           setScreen('home')
         }}
       />
