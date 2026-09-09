@@ -1,3 +1,8 @@
+⚠️ NOT CURRENTLY LIVE — this file is not imported or used anywhere in the
+running app. The actual system prompt sent to Gemini lives in
+server/prompts/system.ts. This document is kept only as reference material
+for future prompt work; don't assume anything below reflects live behavior.
+
 MINDTIP — CORE AI SYSTEM PROMPT
 
 Your Role
