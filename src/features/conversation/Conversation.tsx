@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Message, UserProfile } from '@/types'
 import { createAIProvider } from '@/services/ai'
 import { LocalMemoryService } from '@/services/memory/MemoryService'
@@ -19,7 +19,7 @@ export function Conversation({ profile, initialMessage, onExit }: ConversationPr
   const safety = useMemo(() => new SafetyService(), [])
 
   const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState(initialMessage ?? '')
+  const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
   const started = useRef(false)
 
@@ -80,10 +80,17 @@ export function Conversation({ profile, initialMessage, onExit }: ConversationPr
 
   const voice = useVoiceConversation({ onUserSpeech: send })
 
-  if (!started.current && initialMessage) {
-    started.current = true
-    void send(initialMessage)
-  }
+  useEffect(() => {
+    if (!started.current && initialMessage) {
+      started.current = true
+      void send(initialMessage)
+    }
+    // Intentionally runs once on mount to auto-send the message the user
+    // arrived with (e.g. from a Home quick-choice); `send` itself is stable
+    // enough in practice here, and re-running on every identity change would
+    // risk re-sending.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="min-h-dvh bg-canvas flex flex-col max-w-md mx-auto">

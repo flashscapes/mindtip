@@ -28,6 +28,14 @@ export function Welcome({ onComplete }: WelcomeProps) {
       <Button onClick={() => (step === 0 ? setStep(1) : onComplete())}>
         {step === 0 ? 'Next' : 'Begin'}
       </Button>
+      {step === 1 && (
+        <button
+          onClick={() => setStep(0)}
+          className="mt-6 font-sans text-[13px] text-mist hover:text-bronze transition-colors duration-300"
+        >
+          Back
+        </button>
+      )}
     </div>
   )
 }
