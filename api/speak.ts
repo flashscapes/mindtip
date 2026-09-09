@@ -42,9 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!openaiRes.ok) {
       const errText = await openaiRes.text();
       console.error('OpenAI TTS error:', errText);
-      // TEMPORARY: including the real error below for on-screen debugging —
-      // revert to a generic message once voice is confirmed working.
-      res.status(502).json({ error: 'Speech synthesis failed', detail: errText.slice(0, 300) });
+      res.status(502).json({ error: 'Speech synthesis failed' });
       return;
     }
 
