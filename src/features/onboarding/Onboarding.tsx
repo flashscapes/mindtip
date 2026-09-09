@@ -51,7 +51,14 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   }
 
   return (
-    <div className="min-h-dvh bg-canvas flex flex-col justify-between px-8 py-16 max-w-sm mx-auto">
+    <div className="relative min-h-dvh flex flex-col items-center justify-center px-6 py-10 overflow-hidden bg-gradient-to-br from-[#E9F5F3] via-[#DCEFEC] to-[#CFEAE5]">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-24 -left-20 w-80 h-80 rounded-full bg-[#7FCFC0] opacity-40 blur-3xl" />
+        <div className="absolute top-1/3 -right-24 w-96 h-96 rounded-full bg-[#B8935A] opacity-25 blur-3xl" />
+        <div className="absolute -bottom-32 left-1/4 w-96 h-96 rounded-full bg-[#4FAE9E] opacity-30 blur-3xl" />
+      </div>
+
+      <div className="relative z-10 w-full max-w-sm bg-white/45 backdrop-blur-xl border border-white/60 rounded-[28px] shadow-[0_20px_60px_-15px_rgba(37,56,58,0.25)] px-8 py-12 flex flex-col justify-between" style={{ minHeight: '520px' }}>
       <div>
         <p className="font-sans text-[13px] tracking-[0.08em] text-mist mb-14">{step + 1} of {TOTAL_STEPS}</p>
 
@@ -151,6 +158,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         ) : (
           <Button onClick={finish} disabled={!canAdvance}>Start</Button>
         )}
+      </div>
       </div>
     </div>
   )
