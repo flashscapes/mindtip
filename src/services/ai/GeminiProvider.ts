@@ -41,7 +41,7 @@ export class GeminiProvider implements AIProvider {
 
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      throw new Error(`AI request failed with status ${res.status}${body ? ` — ${body.slice(0, 600)}` : ''}`)
+      throw new Error(`AI request failed with status ${res.status}${body ? ` — ${body.slice(0, 1000)}` : ''}`)
     }
 
     return (await res.json()) as AIResponse
