@@ -22,6 +22,8 @@ export interface AIResponse {
    * guidance for the exact (deliberately simple) bar this must clear.
    */
   reflectionReady?: boolean
+  /** TEMPORARY — raw model output, for diagnosing reflectionReady. */
+  _rawDebug?: string
 }
 
 /**

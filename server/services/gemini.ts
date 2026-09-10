@@ -57,6 +57,9 @@ export async function generateWithGemini(context: AIContext): Promise<AIResponse
           referencedMemory: parsed.tip.referencedMemory ?? undefined
         }
       : undefined,
-    reflectionReady: parsed.reflectionReady ?? false
+    reflectionReady: parsed.reflectionReady ?? false,
+    // TEMPORARY — the raw model output, so we can see exactly what Gemini
+    // returned for reflectionReady without trusting our own parsing code.
+    _rawDebug: cleaned
   }
 }

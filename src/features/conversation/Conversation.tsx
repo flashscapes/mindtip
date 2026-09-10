@@ -105,7 +105,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     }
     setIsThinking(false)
     setReflectionReady(response.reflectionReady ?? false)
-    setReflectionDebug(`reflectionReady=${JSON.stringify(response.reflectionReady)}`)
+    setReflectionDebug(`reflectionReady=${JSON.stringify(response.reflectionReady)} | raw: ${response._rawDebug ?? '(none)'}`)
 
     setMessages(prev => [
       ...prev,
