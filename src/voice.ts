@@ -248,8 +248,11 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
 
         setState('transcribing');
         setDebugLog('Sending audio to /api/transcribe…');
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
         try {
-          const res = await fetch('/api/transcribe', { method: 'POST', body: blob });
+          const res = await fetch('/api/transcribe', { method: 'POST', body: blob, signal: controller.signal });
           if (!res.ok) {
             const body = await res.text().catch(() => '');
             setDebugLog(`Transcribe failed: HTTP ${res.status} — ${body.slice(0, 200)}`);
@@ -264,15 +267,21 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
             startListening();
           }
         } catch (err) {
-          setDebugLog(`Transcription error: ${err instanceof Error ? err.message : String(err)}`);
-          console.error('Transcription failed:', err);
+          const isTimeout = err instanceof Error && err.name === 'AbortError';
+          setDebugLog(isTimeout ? 'Transcription timed out after 15s — listening again' : `Transcription error: ${err instanceof Error ? err.message : String(err)}`);
+          if (!isTimeout) console.error('Transcription failed:', err);
           startListening();
+        } finally {
+          clearTimeout(timeoutId);
         }
       },
     });
 
     vadRef.current = vad;
-    vad.start().catch((err) => {
+    const micTimeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Mic access timed out after 10s')), 10000)
+    );
+    Promise.race([vad.start(), micTimeout]).catch((err) => {
       setDebugLog(`Mic access failed: ${err instanceof Error ? err.message : String(err)}`);
       console.error('Mic access failed:', err);
       setState('idle');
