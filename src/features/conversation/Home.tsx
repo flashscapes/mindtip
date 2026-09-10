@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { UserProfile } from '@/types'
 import { unlockAudio } from '@/voice'
 import { LocalMemoryService } from '@/services/memory/MemoryService'
@@ -14,8 +14,27 @@ interface HomeProps {
 export function Home({ profile, onStart }: HomeProps) {
   const [text, setText] = useState('')
   const name = profile.preferredName ? `, ${profile.preferredName}` : ''
-  const storedMemories = new LocalMemoryService().getAll()
-  const extractionDebug = localStorage.getItem('mindtip_extraction_debug')
+
+  // Memory extraction runs in the background after Close and takes a real
+  // API round-trip (a few seconds) to finish. Home was previously reading
+  // localStorage exactly once, at the instant it first rendered — meaning
+  // it always missed the result, which lands afterward. This polls for a
+  // short window so the debug panel actually catches it when it arrives.
+  const [storedMemories, setStoredMemories] = useState(() => new LocalMemoryService().getAll())
+  const [extractionDebug, setExtractionDebug] = useState(() => localStorage.getItem('mindtip_extraction_debug'))
+
+  useEffect(() => {
+    const refresh = () => {
+      setStoredMemories(new LocalMemoryService().getAll())
+      setExtractionDebug(localStorage.getItem('mindtip_extraction_debug'))
+    }
+    const interval = setInterval(refresh, 1000)
+    const timeout = setTimeout(() => clearInterval(interval), 15000) // stop polling after 15s
+    return () => {
+      clearInterval(interval)
+      clearTimeout(timeout)
+    }
+  }, [])
 
   const handleMoodSubmit = (message: string) => {
     // Must be called synchronously inside this real tap to satisfy the
