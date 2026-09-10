@@ -6,8 +6,8 @@ export default {
       colors: {
         canvas: '#E9F5F3',
         panel: '#FFFFFF',
-        ivory: '#1D2E30',
-        mist: '#56706F',
+        ivory: '#14201F',
+        mist: '#44605F',
         bronze: '#B8935A'
       },
       fontFamily: {

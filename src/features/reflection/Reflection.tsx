@@ -83,13 +83,13 @@ export function Reflection({ messages, profile, onContinueTalking, onExit }: Ref
         <p className="font-sans text-[11px] tracking-[0.08em] text-mist mb-6">TODAY'S CORE REFLECTION</p>
 
         {!result && !error && (
-          <div className="bg-white/45 backdrop-blur-xl border border-white/60 rounded-[22px] px-7 py-10 shadow-[0_16px_40px_-14px_rgba(37,56,58,0.28)]">
+          <div className="bg-white/78 backdrop-blur-xl border border-white/85 rounded-[22px] px-7 py-10 shadow-[0_16px_40px_-14px_rgba(37,56,58,0.28)]">
             <p className="font-display font-light text-[17px] text-mist italic">Sitting with what came up…</p>
           </div>
         )}
 
         {error && (
-          <div className="bg-white/45 backdrop-blur-xl border border-white/60 rounded-[22px] px-7 py-10 shadow-[0_16px_40px_-14px_rgba(37,56,58,0.28)]">
+          <div className="bg-white/78 backdrop-blur-xl border border-white/85 rounded-[22px] px-7 py-10 shadow-[0_16px_40px_-14px_rgba(37,56,58,0.28)]">
             <p className="font-sans text-[14px] text-ivory">MindTip hit a snag putting the reflection together.</p>
             <p className="font-sans text-[12px] text-mist mt-2">{error}</p>
           </div>
@@ -97,13 +97,13 @@ export function Reflection({ messages, profile, onContinueTalking, onExit }: Ref
 
         {result && (
           <>
-            <div className="bg-white/45 backdrop-blur-xl border border-white/60 rounded-[22px] px-7 py-8 shadow-[0_16px_40px_-14px_rgba(37,56,58,0.28)]">
+            <div className="bg-white/78 backdrop-blur-xl border border-white/85 rounded-[22px] px-7 py-8 shadow-[0_16px_40px_-14px_rgba(37,56,58,0.28)]">
               <p className="font-display font-light text-[19px] leading-relaxed text-ivory">{result.reflection}</p>
             </div>
 
             <div className="mt-6 flex flex-col gap-3">
               {nodes.map(node => (
-                <div key={node.key} className="bg-white/40 rounded-2xl overflow-hidden">
+                <div key={node.key} className="bg-white/65 rounded-2xl overflow-hidden">
                   <button
                     onClick={() => setOpenNode(openNode === node.key ? null : node.key)}
                     className="w-full flex items-center justify-between px-5 py-4 text-left"
