@@ -14,15 +14,11 @@ export const QUICK_ACTIONS = [
 ] as const
 
 export const TRIGGER_OPTIONS = [
-  'Work', 'Money', 'Relationships', 'Family', 'Social situations',
-  'Uncertainty', 'Sunday evenings', 'Mornings', 'Overthinking',
-  'Loneliness', 'Feeling overwhelmed'
+  'Work', 'Family', 'Relationships', 'Uncertainty', 'Sunday evenings', 'Overthinking'
 ]
 
 export const HELPS_OPTIONS = [
-  'Walking', 'Exercise', 'Talking to a friend', 'Getting outside',
-  'Taking space', 'Music', 'Writing it down', 'Changing environment',
-  'Getting perspective', 'One small task', 'Sleep/rest'
+  'Walking', 'Talking to a friend', 'Music', 'Writing it down', 'Taking space', 'One small task'
 ]
 
 export const UNHELPFUL_OPTIONS = [

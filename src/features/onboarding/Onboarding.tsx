@@ -8,35 +8,82 @@ interface OnboardingProps {
   onComplete: (profile: UserProfile) => void
 }
 
-// Used only by the triggers screen (step 1) below. The glow/dot styling is
-// a purely visual skin — the actual tap target is a real button padded to
-// a 44pt-minimum height, matching Apple's own guidance for reliable
-// tapping, laid out with a plain wrapping flex (the same reliable
-// mechanism as TextToggle elsewhere in this file), never fragile
-// fixed-position placement.
-function StarChip({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
-  const AMBER = '#D9BE8F'
+// Six fixed positions arranged around a center orb. Deliberately hand-placed
+// (not dynamically laid out) — this is what makes the connecting lines
+// simple and 100% reliable: every star's coordinates are known in advance,
+// so drawing a line from a selected star to the orb is just a plain SVG
+// <line> between two fixed points, never a measured/computed position.
+// Matched 1:1 with exactly 6 options per category (TRIGGER_OPTIONS and
+// HELPS_OPTIONS are both curated down to 6 for this reason) — if either
+// list's length ever changes, this array must be updated to match.
+const STAR_POSITIONS = [
+  { x: 150, y: 40, labelDy: -14 },  // top
+  { x: 225, y: 75, labelDy: -14 },  // upper-right
+  { x: 225, y: 205, labelDy: 20 },  // lower-right
+  { x: 150, y: 240, labelDy: 20 },  // bottom
+  { x: 75, y: 205, labelDy: 20 },   // lower-left
+  { x: 75, y: 75, labelDy: -14 }    // upper-left
+] as const
+const ORB_X = 150
+const ORB_Y = 140
+
+// A single constellation field: a center orb plus up to 6 tappable stars,
+// with a real line drawn from each selected star to the orb. Each star's
+// actual tap target is a transparent circle at r=22 (44px-equivalent
+// diameter, matching Apple's guidance for reliable touch targets) — much
+// larger than its small visible dot, wrapped together with the label in
+// one clickable <g> so tapping anywhere near the star (not just the tiny
+// dot itself) registers reliably on iPhone.
+function ConstellationField({
+  options,
+  selected,
+  onToggle,
+  color,
+  orbColor
+}: {
+  options: readonly string[]
+  selected: string[]
+  onToggle: (value: string) => void
+  color: string
+  orbColor: string
+}) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex items-center gap-2 px-3 rounded-full transition-all duration-300"
-      style={{ minHeight: 44 }}
+    <svg
+      viewBox="0 0 300 280"
+      className="w-full rounded-2xl"
+      style={{ background: `radial-gradient(circle at 50% 45%, ${orbColor}22, #0E2124)` }}
     >
-      <span
-        className="rounded-full shrink-0 transition-all duration-300"
-        style={{
-          width: selected ? 10 : 7,
-          height: selected ? 10 : 7,
-          background: AMBER,
-          boxShadow: selected ? `0 0 10px 3px ${AMBER}99` : 'none',
-          opacity: selected ? 1 : 0.55
-        }}
-      />
-      <span className="text-[13px] transition-colors duration-300" style={{ color: selected ? AMBER : `${AMBER}99` }}>
-        {label}
-      </span>
-    </button>
+      {options.map((opt, i) => {
+        const p = STAR_POSITIONS[i]
+        if (!p || !selected.includes(opt)) return null
+        return <line key={`line-${opt}`} x1={p.x} y1={p.y} x2={ORB_X} y2={ORB_Y} stroke={color} strokeWidth="1.5" opacity="0.7" />
+      })}
+
+      <circle cx={ORB_X} cy={ORB_Y} r="13" fill={orbColor} />
+      <circle cx={ORB_X} cy={ORB_Y} r="13" fill="none" stroke={color} strokeWidth="2" opacity="0.5" />
+
+      {options.map((opt, i) => {
+        const p = STAR_POSITIONS[i]
+        if (!p) return null
+        const isSelected = selected.includes(opt)
+        return (
+          <g key={opt} onClick={() => onToggle(opt)} style={{ cursor: 'pointer' }}>
+            <circle cx={p.x} cy={p.y} r="22" fill="transparent" />
+            <circle cx={p.x} cy={p.y} r={isSelected ? 7 : 4} fill={color} opacity={isSelected ? 1 : 0.5} />
+            <text
+              x={p.x}
+              y={p.y + p.labelDy}
+              fill={color}
+              fontSize={isSelected ? 12 : 11}
+              textAnchor="middle"
+              opacity={isSelected ? 1 : 0.7}
+            >
+              {opt}
+            </text>
+          </g>
+        )
+      })}
+    </svg>
   )
 }
 
@@ -46,11 +93,15 @@ const SUPPORT_STYLES: { value: SupportStyle; label: string; description: string 
   { value: 'blend', label: 'A little of both', description: 'Quick acknowledgment, then straight to action.' }
 ]
 
-// Six short questions, each answerable in a few seconds — the full flow
-// is designed to take roughly 60-90 seconds end to end. Shown once, on
-// first launch; App.tsx gates on the persistent onboardingCompleted flag.
-const TOTAL_STEPS = 6
-type Step = 0 | 1 | 2 | 3 | 4 | 5
+// Five steps: name, triggers (constellation), support style (unchanged),
+// helps (constellation), what doesn't help (unchanged). Proactive
+// check-ins was removed entirely — confirmed via a full codebase search
+// that nothing outside this file ever read that field, so it wasn't yet a
+// meaningful feature; the profile field itself still exists on the type
+// and is just always set to false now, keeping this change isolated to
+// this one file.
+const TOTAL_STEPS = 5
+type Step = 0 | 1 | 2 | 3 | 4
 
 export function Onboarding({ onComplete }: OnboardingProps) {
   const [step, setStep] = useState<Step>(0)
@@ -59,13 +110,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [supportStyle, setSupportStyle] = useState<SupportStyle>('blend')
   const [helps, setHelps] = useState<string[]>([])
   const [unhelpful, setUnhelpful] = useState<string[]>([])
-  const [proactiveCheckIns, setProactiveCheckIns] = useState<boolean | null>(null)
 
   const toggle = (list: string[], setList: (v: string[]) => void, value: string) => {
     setList(list.includes(value) ? list.filter(v => v !== value) : [...list, value])
   }
-
-  const canAdvance = step !== 5 || proactiveCheckIns !== null
 
   const finish = () => {
     const profile: UserProfile = {
@@ -75,7 +123,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       triggers,
       whatHelps: helps,
       whatDoesntHelp: unhelpful,
-      proactiveCheckIns: proactiveCheckIns ?? false,
+      proactiveCheckIns: false,
       onboardedAt: new Date().toISOString(),
       onboardingCompleted: true
     }
@@ -92,7 +140,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
       <div className="relative z-10 w-full max-w-sm bg-white/45 backdrop-blur-xl border border-white/60 rounded-[28px] shadow-[0_20px_60px_-15px_rgba(37,56,58,0.25)] px-8 py-12 flex flex-col justify-between" style={{ minHeight: '520px' }}>
       <div>
-        <p className="font-sans text-[13px] tracking-[0.08em] text-mist mb-14">{step + 1} of {TOTAL_STEPS}</p>
+        <p className="font-sans text-[13px] tracking-[0.08em] text-mist mb-6">{step + 1} of {TOTAL_STEPS}</p>
 
         {step === 0 && (
           <div>
@@ -110,30 +158,15 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
         {step === 1 && (
           <div>
-            <h1 className="font-display font-light text-[26px] leading-snug text-ivory mb-2">What tends to get under your skin?</h1>
-            <p className="text-mist text-[13px] mb-6">Tap what's true for you.</p>
-
-            <div className="relative rounded-2xl p-5 overflow-hidden" style={{ background: 'radial-gradient(circle at 50% 12%, #1B3A3E, #0E2124)' }}>
-              {/* Purely decorative twinkles and center orb — atmosphere
-                  only, never a tap target, so they carry zero reliability
-                  risk. */}
-              <div className="absolute rounded-full pointer-events-none" style={{ width: 3, height: 3, top: '14%', left: '88%', background: '#7FCFC0', opacity: 0.4 }} />
-              <div className="absolute rounded-full pointer-events-none" style={{ width: 2, height: 2, top: '75%', left: '6%', background: '#D9BE8F', opacity: 0.35 }} />
-              <div className="absolute rounded-full pointer-events-none" style={{ width: 2, height: 2, top: '45%', left: '93%', background: '#7FCFC0', opacity: 0.3 }} />
-
-              <div className="flex justify-center mb-4">
-                <div
-                  className="rounded-full"
-                  style={{ width: 26, height: 26, background: 'radial-gradient(circle at 35% 30%, #9AD9CC, #4FAE9E)', boxShadow: '0 0 16px 4px rgba(154,217,204,0.45)' }}
-                />
-              </div>
-
-              <div className="flex flex-wrap justify-center gap-x-1 gap-y-1">
-                {TRIGGER_OPTIONS.map(t => (
-                  <StarChip key={t} label={t} selected={triggers.includes(t)} onClick={() => toggle(triggers, setTriggers, t)} />
-                ))}
-              </div>
-            </div>
+            <h1 className="font-display font-light text-[26px] leading-snug text-ivory mb-1">Let's map your inner sky.</h1>
+            <p className="text-mist text-[13px] mb-4">Tap what's true for you.</p>
+            <ConstellationField
+              options={TRIGGER_OPTIONS}
+              selected={triggers}
+              onToggle={v => toggle(triggers, setTriggers, v)}
+              color="#D9BE8F"
+              orbColor="#4FAE9E"
+            />
           </div>
         )}
 
@@ -158,12 +191,15 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
         {step === 3 && (
           <div>
-            <h1 className="font-display font-light text-[30px] leading-snug text-ivory mb-10">What's actually helped before?</h1>
-            <div className="flex flex-wrap gap-x-7 gap-y-5">
-              {HELPS_OPTIONS.map(h => (
-                <TextToggle key={h} label={h} selected={helps.includes(h)} onClick={() => toggle(helps, setHelps, h)} />
-              ))}
-            </div>
+            <h1 className="font-display font-light text-[26px] leading-snug text-ivory mb-1">What lights your way?</h1>
+            <p className="text-mist text-[13px] mb-4">Tap what's helped before.</p>
+            <ConstellationField
+              options={HELPS_OPTIONS}
+              selected={helps}
+              onToggle={v => toggle(helps, setHelps, v)}
+              color="#7FCFC0"
+              orbColor="#B8935A"
+            />
           </div>
         )}
 
@@ -177,36 +213,16 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             </div>
           </div>
         )}
-
-        {step === 5 && (
-          <div>
-            <h1 className="font-display font-light text-[30px] leading-snug text-ivory mb-10">Want the occasional nudge from me?</h1>
-            <div>
-              <button onClick={() => setProactiveCheckIns(true)} className="w-full text-left py-4">
-                <p className={`text-[19px] transition-colors duration-300 ${proactiveCheckIns === true ? 'text-bronze' : 'text-ivory'}`}>Yes, sometimes</p>
-                <p className="text-[14px] text-mist mt-1">A quiet check-in around known hard moments, like Sunday evenings.</p>
-              </button>
-              <button
-                onClick={() => setProactiveCheckIns(false)}
-                className="w-full text-left py-4"
-                style={{ borderTop: '1px solid rgba(37,56,58,0.08)' }}
-              >
-                <p className={`text-[19px] transition-colors duration-300 ${proactiveCheckIns === false ? 'text-bronze' : 'text-ivory'}`}>No, only when I reach out</p>
-                <p className="text-[14px] text-mist mt-1">I'll stay quiet until you start a conversation.</p>
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="flex justify-between items-center mt-10">
         {step > 0 ? (
           <Button variant="ghost" onClick={() => setStep((s => (s - 1) as Step)(step))}>Back</Button>
         ) : <span />}
-        {step < 5 ? (
+        {step < 4 ? (
           <Button onClick={() => setStep((s => (s + 1) as Step)(step))}>{step === 1 ? 'Save my sky' : 'Continue'}</Button>
         ) : (
-          <Button onClick={finish} disabled={!canAdvance}>Start</Button>
+          <Button onClick={finish}>Start</Button>
         )}
       </div>
       </div>
