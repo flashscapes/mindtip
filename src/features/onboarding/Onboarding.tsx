@@ -51,16 +51,16 @@ function ConstellationField({
     <svg
       viewBox="0 0 300 280"
       className="w-full rounded-2xl"
-      style={{ background: `radial-gradient(circle at 50% 45%, ${orbColor}22, #0E2124)` }}
+      style={{ background: `radial-gradient(circle at 50% 45%, ${orbColor}33, #0A1A1C)` }}
     >
       {options.map((opt, i) => {
         const p = STAR_POSITIONS[i]
         if (!p || !selected.includes(opt)) return null
-        return <line key={`line-${opt}`} x1={p.x} y1={p.y} x2={ORB_X} y2={ORB_Y} stroke={color} strokeWidth="1.5" opacity="0.7" />
+        return <line key={`line-${opt}`} x1={p.x} y1={p.y} x2={ORB_X} y2={ORB_Y} stroke={color} strokeWidth="1.8" opacity="0.85" />
       })}
 
       <circle cx={ORB_X} cy={ORB_Y} r="13" fill={orbColor} />
-      <circle cx={ORB_X} cy={ORB_Y} r="13" fill="none" stroke={color} strokeWidth="2" opacity="0.5" />
+      <circle cx={ORB_X} cy={ORB_Y} r="13" fill="none" stroke={color} strokeWidth="2" opacity="0.65" />
 
       {options.map((opt, i) => {
         const p = STAR_POSITIONS[i]
@@ -69,14 +69,14 @@ function ConstellationField({
         return (
           <g key={opt} onClick={() => onToggle(opt)} style={{ cursor: 'pointer' }}>
             <circle cx={p.x} cy={p.y} r="22" fill="transparent" />
-            <circle cx={p.x} cy={p.y} r={isSelected ? 7 : 4} fill={color} opacity={isSelected ? 1 : 0.5} />
+            <circle cx={p.x} cy={p.y} r={isSelected ? 7 : 4} fill={color} opacity={isSelected ? 1 : 0.65} />
             <text
               x={p.x}
               y={p.y + p.labelDy}
               fill={color}
               fontSize={isSelected ? 12 : 11}
               textAnchor="middle"
-              opacity={isSelected ? 1 : 0.7}
+              opacity={isSelected ? 1 : 0.85}
             >
               {opt}
             </text>
@@ -136,9 +136,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         className="absolute inset-0 bg-cover bg-center"
         style={{ backgroundImage: "url('/images/welcome-mountains.jpg')" }}
       />
-      <div className="absolute inset-0 bg-gradient-to-b from-[#E9F5F3]/70 via-[#DCEFEC]/55 to-[#CFEAE5]/80" />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#E9F5F3]/45 via-[#DCEFEC]/35 to-[#CFEAE5]/55" />
 
-      <div className="relative z-10 w-full max-w-sm bg-white/45 backdrop-blur-xl border border-white/60 rounded-[28px] shadow-[0_20px_60px_-15px_rgba(37,56,58,0.25)] px-8 py-12 flex flex-col justify-between" style={{ minHeight: '520px' }}>
+      <div className="relative z-10 w-full max-w-sm bg-white/60 backdrop-blur-xl border border-white/70 rounded-[28px] shadow-[0_20px_60px_-15px_rgba(37,56,58,0.25)] px-8 py-12 flex flex-col justify-between" style={{ minHeight: '520px' }}>
       <div>
         <p className="font-sans text-[13px] tracking-[0.08em] text-mist mb-6">{step + 1} of {TOTAL_STEPS}</p>
 
