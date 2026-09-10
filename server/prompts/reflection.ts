@@ -2,10 +2,11 @@
  * DESTINATION: server/prompts/reflection.ts
  *
  * System prompt for the Core Reflection — a deliberately rarer, more
- * considered synthesis than a regular MindTip turn. Fired only once the
- * person has actively chosen to see it (see reflectionReady in
- * server/services/gemini.ts), so this can afford to think harder about
- * one specific conversation rather than respond turn-by-turn.
+ * considered synthesis than a regular MindTip turn. Fired only when the
+ * person actively taps "Emerging Insights" (see canReflect in
+ * src/features/conversation/Conversation.tsx), so this can afford to
+ * think harder about one specific conversation rather than respond
+ * turn-by-turn.
  */
 export const REFLECTION_SYSTEM_PROMPT = `You are generating a "Core Reflection" for MindTip — a concise, elegant synthesis of a conversation the person just had, not a transcript summary and not generic advice.
 

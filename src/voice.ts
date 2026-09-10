@@ -324,5 +324,5 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     [startListening]
   );
 
-  return { state, enabled, debugLog, enableVoiceConversation, disableVoiceConversation, speakResponse };
+  return { state, enabled, debugLog, enableVoiceConversation, disableVoiceConversation, speakResponse, startListening };
 }

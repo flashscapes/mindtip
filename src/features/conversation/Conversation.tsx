@@ -205,6 +205,13 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
       }
       if (initialMessage) {
         void send(initialMessage)
+      } else if (autoEnableVoice) {
+        // No initial message means nothing will trigger the usual
+        // speak-response-then-listen chain (e.g. resuming via "Continue
+        // talking" after a Reflection) — start listening directly so
+        // voice actually stays hands-free instead of silently sitting
+        // enabled-but-idle until the person types something.
+        voice.startListening()
       }
     }
     void run()
