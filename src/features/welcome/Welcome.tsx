@@ -11,7 +11,7 @@ const STEPS = [
   },
   {
     headline: 'Brief check-in, fast action',
-    body: "No lingering in open-ended venting. MindTip leads with quick validation, then moves straight into a concrete next step — and remembers what worked, so next time is faster."
+    body: "MindTip helps you see what's really going on and know exactly what to do next — learning more about you with every conversation."
   }
 ] as const
 
