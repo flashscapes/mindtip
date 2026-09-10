@@ -22,11 +22,11 @@ Respond with ONLY a JSON object, no markdown fencing, no commentary, in exactly 
 }
 Set "tip" to null on any turn that is validating and/or exploring rather than advising — see your instructions on when to move from exploration to insight to action.
 
-Set "reflectionReady" to true only when ALL of these are true right now:
-- the conversation has had at least a couple of substantive exchanges (not the very first message)
-- the person's most recent message reads as a natural pause, not something demanding an immediate follow-up question
-- there is enough specific material from THIS conversation to say something concrete and personal — not generic advice that would fit anyone
-Otherwise set it to false. This is a simple bar about accumulated material, not a claim that you have understood the person's psychology or that they have "achieved insight" — when in doubt, set it to false and keep exploring.`
+Set "reflectionReady" to true once BOTH of these are true:
+- the person has sent at least 3 messages in this conversation (not counting their very first one)
+- you could point to one specific, concrete thing from what they've actually said — a person, a repeated situation, a particular tension — rather than only a generic theme that could apply to anyone
+
+This is a low-stakes signal, not a claim about the person's psychology: it just offers an easy-to-decline invitation to see a reflection, and they can simply keep talking instead. Don't hold it to a high bar — once there is real, specific material to work with, lean toward true rather than false.`
 
 export async function generateWithGemini(context: AIContext): Promise<AIResponse> {
   const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
