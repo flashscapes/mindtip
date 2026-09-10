@@ -17,16 +17,9 @@ const RESPONSE_FORMAT_INSTRUCTIONS = `
 Respond with ONLY a JSON object, no markdown fencing, no commentary, in exactly this shape:
 {
   "replyText": string,
-  "tip": { "headline": string, "action": string, "referencedMemory": string | null } | null,
-  "reflectionReady": boolean
+  "tip": { "headline": string, "action": string, "referencedMemory": string | null } | null
 }
-Set "tip" to null on any turn that is validating and/or exploring rather than advising — see your instructions on when to move from exploration to insight to action.
-
-Set "reflectionReady" to true once BOTH of these are true:
-- the person has sent at least 3 messages in this conversation (not counting their very first one)
-- you could point to one specific, concrete thing from what they've actually said — a person, a repeated situation, a particular tension — rather than only a generic theme that could apply to anyone
-
-This is a low-stakes signal, not a claim about the person's psychology: it just offers an easy-to-decline invitation to see a reflection, and they can simply keep talking instead. Don't hold it to a high bar — once there is real, specific material to work with, lean toward true rather than false.`
+Set "tip" to null on any turn that is validating and/or exploring rather than advising — see your instructions on when to move from exploration to insight to action.`
 
 export async function generateWithGemini(context: AIContext): Promise<AIResponse> {
   const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
@@ -45,7 +38,6 @@ export async function generateWithGemini(context: AIContext): Promise<AIResponse
   const parsed = JSON.parse(cleaned) as {
     replyText: string
     tip?: { headline: string; action: string; referencedMemory?: string | null }
-    reflectionReady?: boolean
   }
 
   return {
@@ -56,10 +48,6 @@ export async function generateWithGemini(context: AIContext): Promise<AIResponse
           action: parsed.tip.action,
           referencedMemory: parsed.tip.referencedMemory ?? undefined
         }
-      : undefined,
-    reflectionReady: parsed.reflectionReady ?? false,
-    // TEMPORARY — the raw model output, so we can see exactly what Gemini
-    // returned for reflectionReady without trusting our own parsing code.
-    _rawDebug: cleaned
+      : undefined
   }
 }

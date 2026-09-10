@@ -35,8 +35,10 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
   const [reflectionReady, setReflectionReady] = useState(false)
-  const [reflectionDebug, setReflectionDebug] = useState<string>('')
   const started = useRef(false)
+  // Offered at most once per conversation — after that, no repeated
+  // nagging even if the person keeps talking past the threshold.
+  const reflectionOfferedRef = useRef(false)
 
   const send = async (text: string) => {
     const trimmed = text.trim()
@@ -104,8 +106,19 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
       return
     }
     setIsThinking(false)
-    setReflectionReady(response.reflectionReady ?? false)
-    setReflectionDebug(`reflectionReady=${JSON.stringify(response.reflectionReady)} | raw: ${response._rawDebug ?? '(none)'}`)
+
+    // Simple, reliable trigger instead of an AI-reported flag: once there
+    // have been a handful of real exchanges, offer the reflection — once
+    // per conversation. Two rounds of prompt tuning couldn't get the model
+    // to self-report this consistently, so this moved out of the model's
+    // hands entirely. The Reflection screen's own prompt already handles
+    // the case where there isn't quite enough material yet (it says so
+    // plainly rather than inventing false depth), so this doesn't need to
+    // be precise — just present at a reasonable point.
+    const userMessageCount = messages.filter(m => m.role === 'user').length + 1
+    const shouldOfferReflection = !reflectionOfferedRef.current && userMessageCount >= 4
+    if (shouldOfferReflection) reflectionOfferedRef.current = true
+    setReflectionReady(shouldOfferReflection)
 
     setMessages(prev => [
       ...prev,
@@ -123,7 +136,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     }
 
     void voice.speakResponse(
-      response.reflectionReady
+      shouldOfferReflection
         ? `${response.replyText} I think we've uncovered something worth reflecting on — say "yes" if you'd like to see it, or just keep going.`
         : response.replyText
     )
@@ -211,13 +224,6 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
           <button onClick={handleExit} className="text-[13px] text-mist hover:text-bronze transition-colors duration-300">Close</button>
         </div>
       </header>
-
-      {/* TEMPORARY — remove once the spoken invitation is confirmed working. */}
-      {reflectionDebug && (
-        <p className="px-8 py-2 text-[11px] text-mist bg-panel/60 break-words">
-          🔧 {reflectionDebug}
-        </p>
-      )}
 
       <div className="flex-1 overflow-y-auto px-8 py-10 flex flex-col gap-6">
         {messages.map(m => (

@@ -42,7 +42,7 @@ export class MockAIProvider implements AIProvider {
   }
 
   private buildTipResponse(context: AIContext): AIResponse {
-    const { profile, relevantMemories, recentMessages, currentMessage } = context
+    const { profile, relevantMemories, currentMessage } = context
     const usedMemory = relevantMemories.find(m => m.type === 'effective_strategy')
     const matchedTrigger = profile.triggers.find(t => currentMessage.toLowerCase().includes(t.toLowerCase()))
     const fallbackAction = profile.whatHelps[0] ?? 'stepping away for a few minutes'
@@ -59,20 +59,13 @@ export class MockAIProvider implements AIProvider {
 
     const headline = usedMemory ? "You've used this before." : "Here's what might actually help."
 
-    // Mirrors the real prompt's deliberately simple bar: only once there's
-    // been at least one prior exchange (not the very first message) and
-    // there's something specific to reflect on (a matched trigger or reused
-    // strategy) rather than a generic fallback.
-    const reflectionReady = recentMessages.length >= 2 && (matchedTrigger !== undefined || usedMemory !== undefined)
-
     return {
       replyText: reflection,
       tip: {
         headline,
         action,
         referencedMemory: usedMemory ? usedMemory.content : undefined
-      },
-      reflectionReady
+      }
     }
   }
 
