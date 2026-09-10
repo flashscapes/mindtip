@@ -11,22 +11,30 @@ import { Button } from '@/components/ui/Button'
 interface ConversationProps {
   profile: UserProfile
   initialMessage?: string
+  // Lets a conversation resume with prior history intact (e.g. "Continue
+  // talking" after a Reflection) instead of always starting empty.
+  seedMessages?: Message[]
   // When true, hands-free voice is enabled before the first message is
   // sent — used when the user arrives here via the Home mood check-in,
   // which already unlocked audio playback during its own tap.
   autoEnableVoice?: boolean
+  // Called when the person taps the "Reflection ready" invitation — never
+  // fired automatically. Hands the full transcript up so a Reflection can
+  // be generated from it.
+  onReflectionReady: (messages: Message[]) => void
   onExit: () => void
 }
 
-export function Conversation({ profile, initialMessage, autoEnableVoice, onExit }: ConversationProps) {
+export function Conversation({ profile, initialMessage, seedMessages, autoEnableVoice, onReflectionReady, onExit }: ConversationProps) {
   const ai = useMemo(() => createAIProvider(), [])
   const memory = useMemo(() => new LocalMemoryService(), [])
   const memoryExtractor = useMemo(() => createMemoryExtractor(), [])
   const safety = useMemo(() => new SafetyService(), [])
 
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<Message[]>(seedMessages ?? [])
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
+  const [reflectionReady, setReflectionReady] = useState(false)
   const started = useRef(false)
 
   const send = async (text: string) => {
@@ -41,9 +49,11 @@ export function Conversation({ profile, initialMessage, autoEnableVoice, onExit 
     }
     setMessages(prev => [...prev, userMessage])
     setInput('')
+    setReflectionReady(false)
 
     const safetyResult = safety.check(trimmed)
     if (safetyResult.level === 'crisis') {
+      setReflectionReady(false)
       setMessages(prev => [
         ...prev,
         {
@@ -68,22 +78,20 @@ export function Conversation({ profile, initialMessage, autoEnableVoice, onExit 
       })
     } catch (err) {
       setIsThinking(false)
-      const errMsg = err instanceof Error ? err.message : String(err)
       console.error('AI response generation failed:', err)
-      // TEMPORARY — surfacing the raw error in-chat for diagnosis; revert to
-      // a plain friendly message once the underlying failure is understood.
       setMessages(prev => [
         ...prev,
         {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: `🔧 MindTip hit an error generating a response: ${errMsg}`,
+          content: "MindTip hit a snag putting that together. Mind trying again?",
           createdAt: new Date().toISOString()
         }
       ])
       return
     }
     setIsThinking(false)
+    setReflectionReady(response.reflectionReady ?? false)
 
     setMessages(prev => [
       ...prev,
@@ -192,6 +200,16 @@ export function Conversation({ profile, initialMessage, autoEnableVoice, onExit 
         ))}
         {isThinking && <p className="text-mist italic text-[14px]">Thinking…</p>}
       </div>
+
+      {reflectionReady && (
+        <button
+          onClick={() => onReflectionReady(messages)}
+          className="mx-8 mb-4 text-left bg-panel rounded-card px-5 py-4 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow duration-300"
+        >
+          <span className="font-sans text-[14px] text-ivory">I think we've uncovered something worth reflecting on.</span>
+          <span className="text-bronze text-[18px] ml-4 shrink-0">→</span>
+        </button>
+      )}
 
       <form
         onSubmit={e => {

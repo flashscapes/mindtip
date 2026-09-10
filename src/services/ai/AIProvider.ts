@@ -15,6 +15,13 @@ export interface AIContext {
 export interface AIResponse {
   replyText: string
   tip?: Tip
+  /**
+   * True when this turn's reply included enough substantive material to
+   * offer the person a Reflection — never a claim that the model has
+   * understood their psychology. See the system prompt's "reflectionReady"
+   * guidance for the exact (deliberately simple) bar this must clear.
+   */
+  reflectionReady?: boolean
 }
 
 /**

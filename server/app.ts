@@ -3,6 +3,7 @@ import express from 'express'
 import cors from 'cors'
 import { generateRouter } from './routes/generate.js'
 import { extractMemoryRouter } from './routes/extractMemory.js'
+import { reflectRouter } from './routes/reflect.js'
 
 // The Express app itself, with no .listen() call — this is what gets
 // reused both by the local dev server (server/index.ts) and by Vercel's
@@ -13,5 +14,6 @@ app.use(cors())
 app.use(express.json())
 app.use('/api', generateRouter)
 app.use('/api', extractMemoryRouter)
+app.use('/api', reflectRouter)
 
 export default app
