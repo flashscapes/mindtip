@@ -21,10 +21,21 @@ export function Reflection({ messages, profile, onContinueTalking, onExit }: Ref
   useEffect(() => {
     let cancelled = false
     const generator = createReflectionGenerator()
-    const relevantMemories = new LocalMemoryService()
-      .getAll()
-      .sort((a, b) => b.confidence - a.confidence)
-      .slice(0, 5)
+
+    // Reuses the same relevance method every regular chat turn already
+    // uses (whole-word overlap, no forced quota — returns fewer than the
+    // limit, or none, when that's all that's genuinely relevant) instead
+    // of the previous top-5-by-confidence approach, which ignored whether
+    // a memory had anything to do with this conversation at all.
+    //
+    // Query is built from only the user's own messages, not the
+    // assistant's replies — otherwise MindTip's own prior wording would
+    // disproportionately shape which memories get pulled back in.
+    const userContent = messages
+      .filter(m => m.role === 'user')
+      .map(m => m.content)
+      .join(' ')
+    const relevantMemories = new LocalMemoryService().getRelevant(userContent, 5)
 
     generator
       .generate({ messages, profile, relevantMemories })
