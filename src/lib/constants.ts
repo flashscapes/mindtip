@@ -23,5 +23,5 @@ export const HELPS_OPTIONS = [
 
 export const UNHELPFUL_OPTIONS = [
   'Meditation', 'Breathing exercises', 'Long explanations',
-  'Motivational quotes', 'Being told to "just relax"', 'Too many questions'
+  'Motivational quotes', 'Too many questions'
 ]
