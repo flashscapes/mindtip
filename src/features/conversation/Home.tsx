@@ -75,13 +75,34 @@ export function Home({ profile, onStart }: HomeProps) {
           What shall we explore today{name}?
         </h1>
 
-        <div
-          className="mindtip-orb w-32 h-32 rounded-full mb-10 transition-all duration-700"
-          style={{
-            background: `radial-gradient(circle at 35% 30%, ${orbFrom}, ${orbTo})`,
-            boxShadow: '0 20px 50px -15px rgba(37,56,58,0.35)'
-          }}
-        />
+        <div className="relative w-40 h-40 mb-10">
+          {/* Mist halo — orbits slowly around the orb, colored to match the
+              currently selected intention (reuses orbFrom/orbTo directly,
+              so it updates automatically with no separate logic). */}
+          <div className="absolute inset-0 mindtip-mist-spin">
+            <div className="absolute rounded-full" style={{ width: 44, height: 44, top: -6, left: '50%', marginLeft: -22, background: orbFrom, opacity: 0.35, filter: 'blur(18px)' }} />
+            <div className="absolute rounded-full" style={{ width: 40, height: 40, bottom: 4, left: 8, background: orbTo, opacity: 0.3, filter: 'blur(18px)' }} />
+            <div className="absolute rounded-full" style={{ width: 40, height: 40, bottom: 0, right: 4, background: orbFrom, opacity: 0.3, filter: 'blur(18px)' }} />
+          </div>
+
+          {/* The orb itself — heartbeat pulse (unchanged), plus layered
+              inset shadows for real dimensionality instead of a flat fill. */}
+          <div
+            className="mindtip-orb absolute top-1/2 left-1/2 -mt-16 -ml-16 w-32 h-32 rounded-full overflow-hidden transition-all duration-700"
+            style={{
+              background: `radial-gradient(circle at 35% 30%, ${orbFrom}, ${orbTo})`,
+              boxShadow: '0 20px 50px -15px rgba(37,56,58,0.35), inset -10px -12px 22px rgba(0,0,0,0.18), inset 8px 10px 18px rgba(255,255,255,0.22)'
+            }}
+          >
+            {/* Slowly rotating inner highlight — off-center, so rotating it
+                visibly circulates within the sphere, suggesting something
+                alive moving inside rather than a static fill. */}
+            <div
+              className="absolute inset-0 mindtip-orb-swirl"
+              style={{ background: 'radial-gradient(circle at 30% 25%, rgba(255,255,255,0.45), transparent 60%)' }}
+            />
+          </div>
+        </div>
 
         <div className="grid grid-cols-2 gap-3 w-full mb-6">
           {INTENTIONS.map(intention => (

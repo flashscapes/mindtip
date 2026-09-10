@@ -28,3 +28,19 @@ body {
 .mindtip-orb {
   animation: mindtip-heartbeat 1.3s ease-in-out infinite;
 }
+
+@keyframes mindtip-mist-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.mindtip-mist-spin {
+  animation: mindtip-mist-spin 40s linear infinite;
+}
+
+@keyframes mindtip-orb-swirl-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.mindtip-orb-swirl {
+  animation: mindtip-orb-swirl-spin 22s linear infinite;
+}
