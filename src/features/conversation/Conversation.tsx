@@ -18,9 +18,9 @@ interface ConversationProps {
   // sent — used when the user arrives here via the Home mood check-in,
   // which already unlocked audio playback during its own tap.
   autoEnableVoice?: boolean
-  // Called when the person taps the "Reflection ready" invitation — never
-  // fired automatically. Hands the full transcript up so a Reflection can
-  // be generated from it.
+  // Called when the person taps "Emerging Insights" (or accepts a spoken
+  // suggestion by saying "yes"). Hands the full transcript up so a
+  // Reflection can be generated from it.
   onReflectionReady: (messages: Message[]) => void
   onExit: () => void
 }
@@ -34,24 +34,32 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
   const [messages, setMessages] = useState<Message[]>(seedMessages ?? [])
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
-  const [reflectionReady, setReflectionReady] = useState(false)
+  // True only in the single turn right after MindTip has verbally
+  // suggested Emerging Insights — lets a short spoken "yes" accept that
+  // specific suggestion. It is NOT what gates access to the feature; the
+  // header action (see canReflect below) is always available regardless
+  // of this value once there's enough conversation.
+  const [justSuggested, setJustSuggested] = useState(false)
   const started = useRef(false)
-  // Offered at most once per conversation — after that, no repeated
-  // nagging even if the person keeps talking past the threshold.
-  const reflectionOfferedRef = useRef(false)
+
+  // Emerging Insights unlocks once there's enough conversation to reflect
+  // on — a plain, always-visible action from here on, not a one-time,
+  // timed invitation. Recomputed from current message count on every
+  // render, so no separate state or one-time gating is needed.
+  const canReflect = messages.filter(m => m.role === 'user').length >= 2
 
   const send = async (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || isThinking) return
 
-    // If the invitation is currently showing and the person's reply is a
-    // short, clear acceptance, treat it the same as tapping the visual
-    // card — this is the only way someone in a fully hands-free voice
-    // conversation can actually act on an invitation they never see on
-    // screen. A longer reply (even one starting with "yes") falls through
-    // to a normal turn instead, so real answers never get hijacked.
+    // A short, clear "yes" right after MindTip verbally suggested Emerging
+    // Insights accepts that suggestion — mainly for hands-free voice users
+    // who aren't looking at the screen. A longer reply (even one starting
+    // with "yes") falls through to a normal turn instead, so real answers
+    // never get hijacked. This is a courtesy shortcut only; the header
+    // action works regardless of whether this ever fires.
     const isSpokenAcceptance = /^(yes|yeah|yep|sure|okay|ok|please|show me|let'?s see it|go ahead)\.?$/i.test(trimmed)
-    if (reflectionReady && isSpokenAcceptance) {
+    if (justSuggested && isSpokenAcceptance) {
       onReflectionReady(messages)
       return
     }
@@ -64,11 +72,11 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     }
     setMessages(prev => [...prev, userMessage])
     setInput('')
-    setReflectionReady(false)
+    setJustSuggested(false)
 
     const safetyResult = safety.check(trimmed)
     if (safetyResult.level === 'crisis') {
-      setReflectionReady(false)
+      setJustSuggested(false)
       setMessages(prev => [
         ...prev,
         {
@@ -107,18 +115,15 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     }
     setIsThinking(false)
 
-    // Simple, reliable trigger instead of an AI-reported flag: once there
-    // have been a handful of real exchanges, offer the reflection — once
-    // per conversation. Two rounds of prompt tuning couldn't get the model
-    // to self-report this consistently, so this moved out of the model's
-    // hands entirely. The Reflection screen's own prompt already handles
-    // the case where there isn't quite enough material yet (it says so
-    // plainly rather than inventing false depth), so this doesn't need to
-    // be precise — just present at a reasonable point.
+    // A one-time, low-stakes verbal courtesy: the moment the conversation
+    // first reaches a reasonable depth, mention aloud that Emerging
+    // Insights is available. Fires exactly once per conversation (strict
+    // equality, not >=) so it never repeats on later turns — the header
+    // action remains available the whole time regardless, so missing or
+    // ignoring this moment costs nothing.
     const userMessageCount = messages.filter(m => m.role === 'user').length + 1
-    const shouldOfferReflection = !reflectionOfferedRef.current && userMessageCount >= 4
-    if (shouldOfferReflection) reflectionOfferedRef.current = true
-    setReflectionReady(shouldOfferReflection)
+    const justCrossedSuggestionThreshold = userMessageCount === 4
+    setJustSuggested(justCrossedSuggestionThreshold)
 
     setMessages(prev => [
       ...prev,
@@ -136,8 +141,8 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     }
 
     void voice.speakResponse(
-      shouldOfferReflection
-        ? `${response.replyText} I think we've uncovered something worth reflecting on — say "yes" if you'd like to see it, or just keep going.`
+      justCrossedSuggestionThreshold
+        ? `${response.replyText} By the way, there's an Emerging Insights option now if you'd like to see what's coming together — just say "yes", or keep going.`
         : response.replyText
     )
   }
@@ -215,6 +220,14 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
       <header className="flex items-center justify-between px-8 py-6" style={{ borderBottom: '1px solid rgba(37,56,58,0.08)' }}>
         <span className="font-sans text-[13px] tracking-[0.08em] text-mist">MindTip</span>
         <div className="flex items-center gap-5">
+          {canReflect && (
+            <button
+              onClick={() => onReflectionReady(messages)}
+              className="text-[13px] text-bronze hover:opacity-80 transition-opacity duration-300"
+            >
+              ✦ Emerging Insights
+            </button>
+          )}
           <button
             onClick={() => (voice.enabled ? voice.disableVoiceConversation() : voice.enableVoiceConversation())}
             className={`text-[13px] transition-colors duration-300 ${voice.enabled ? 'text-bronze' : 'text-mist hover:text-bronze'}`}
@@ -231,16 +244,6 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
         ))}
         {isThinking && <p className="text-mist italic text-[14px]">Thinking…</p>}
       </div>
-
-      {reflectionReady && (
-        <button
-          onClick={() => onReflectionReady(messages)}
-          className="mx-8 mb-4 text-left bg-panel rounded-card px-5 py-4 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow duration-300"
-        >
-          <span className="font-sans text-[14px] text-ivory">I think we've uncovered something worth reflecting on.</span>
-          <span className="text-bronze text-[18px] ml-4 shrink-0">→</span>
-        </button>
-      )}
 
       <form
         onSubmit={e => {
