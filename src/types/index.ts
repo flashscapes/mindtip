@@ -25,7 +25,7 @@ export interface UserProfile {
  * A distilled, structured unit of long-term memory.
  * Never raw conversation text — see MemoryService for how these are derived.
  */
-export type MemoryType = 'pattern' | 'effective_strategy' | 'ineffective_strategy' | 'trigger'
+export type MemoryType = 'pattern' | 'effective_strategy' | 'ineffective_strategy' | 'trigger' | 'situational_context'
 
 export interface Memory {
   id: string
@@ -36,6 +36,8 @@ export interface Memory {
   createdAt: string
   lastUsedAt?: string
   active: boolean
+  /** Only set for 'situational_context' memories — once past, this memory is excluded from retrieval (see MemoryService.getAll). */
+  expiresAt?: string
 }
 
 export type MessageRole = 'user' | 'assistant'

@@ -173,7 +173,11 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
       for (const item of result.memories) {
         const key = item.content.trim().toLowerCase()
         if (!key || existingContent.includes(key)) continue // avoid duplicate buildup across sessions
-        memory.remember(item.type, item.content, item.confidence, 'conversation')
+        const expiresAt =
+          item.type === 'situational_context'
+            ? new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString() // 10 days — long enough to follow up, short enough not to linger
+            : undefined
+        memory.remember(item.type, item.content, item.confidence, 'conversation', expiresAt)
         existingContent.push(key)
       }
     } catch (err) {

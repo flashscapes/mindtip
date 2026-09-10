@@ -23,7 +23,7 @@ const STOPWORDS = new Set([
 export interface MemoryService {
   getAll(): Memory[]
   getRelevant(currentMessage: string, limit?: number): Memory[]
-  remember(type: MemoryType, content: string, confidence: number, source: Memory['source']): Memory
+  remember(type: MemoryType, content: string, confidence: number, source: Memory['source'], expiresAt?: string): Memory
   forget(id: string): void
   clearAll(): void
 }
@@ -46,7 +46,8 @@ export class LocalMemoryService implements MemoryService {
   }
 
   getAll(): Memory[] {
-    return this.read().filter(m => m.active)
+    const now = Date.now()
+    return this.read().filter(m => m.active && (!m.expiresAt || new Date(m.expiresAt).getTime() > now))
   }
 
   /**
@@ -79,7 +80,7 @@ export class LocalMemoryService implements MemoryService {
       .map(s => s.memory)
   }
 
-  remember(type: MemoryType, content: string, confidence: number, source: Memory['source']): Memory {
+  remember(type: MemoryType, content: string, confidence: number, source: Memory['source'], expiresAt?: string): Memory {
     const memory: Memory = {
       id: crypto.randomUUID(),
       type,
@@ -87,7 +88,8 @@ export class LocalMemoryService implements MemoryService {
       confidence,
       source,
       createdAt: new Date().toISOString(),
-      active: true
+      active: true,
+      ...(expiresAt ? { expiresAt } : {})
     }
     this.write([...this.read(), memory])
     return memory
