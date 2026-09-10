@@ -85,10 +85,19 @@ export function MoodCheckIn({ onSubmit }: MoodCheckInProps) {
   const leftBrow = `M 67 84 Q 78 ${browMidY} 89 84`
   const rightBrow = `M 111 84 Q 122 ${browMidY} 133 84`
 
-  // Simple closed eyes sit just below the brows, unaffected by mood — the
-  // brows and mouth carry the expression.
-  const leftEye = 'M 71 99 Q 78 103 85 99'
-  const rightEye = 'M 115 99 Q 122 103 129 99'
+  // Eyes: open, with a visible iris/pupil and a small catchlight for real
+  // gaze and life, rather than a simple closed-eye line. Eye height narrows
+  // slightly at low mood (a gentle squint) and widens slightly at high mood
+  // (bright, alert) — continuous with `expression`, so it never jumps
+  // discretely between mood steps.
+  const eyeRy = 8 + expression * 2
+  const leftEyeCx = 78
+  const rightEyeCx = 122
+  const eyeCy = 98
+
+  // Blush fades in only above neutral mood — invisible at "Just okay" and
+  // below, gradually appearing through "Working on things" to "Pretty good".
+  const blushOpacity = Math.max(0, expression) * 0.7
 
   const faceBase = MOOD_COLORS[index]
   const faceEdge = darken(faceBase, 0.68)
@@ -117,8 +126,22 @@ export function MoodCheckIn({ onSubmit }: MoodCheckInProps) {
 
         <path d={leftBrow} stroke={lineColor} strokeWidth="3.5" strokeLinecap="round" fill="none" opacity="0.7" />
         <path d={rightBrow} stroke={lineColor} strokeWidth="3.5" strokeLinecap="round" fill="none" opacity="0.7" />
-        <path d={leftEye} stroke={lineColor} strokeWidth="3.5" strokeLinecap="round" fill="none" opacity="0.65" />
-        <path d={rightEye} stroke={lineColor} strokeWidth="3.5" strokeLinecap="round" fill="none" opacity="0.65" />
+
+        {/* Blush — invisible below neutral mood, fades in as mood improves */}
+        <ellipse cx={leftEyeCx - 16} cy={eyeCy + 14} rx="9" ry="6" fill="#E8886B" opacity={blushOpacity * 0.5} />
+        <ellipse cx={rightEyeCx + 16} cy={eyeCy + 14} rx="9" ry="6" fill="#E8886B" opacity={blushOpacity * 0.5} />
+
+        {/* Open eyes: sclera, iris, pupil, and a small catchlight for real gaze */}
+        <ellipse cx={leftEyeCx} cy={eyeCy} rx="9" ry={eyeRy} fill="#FBFAF3" />
+        <circle cx={leftEyeCx} cy={eyeCy} r="5" fill={lineColor} />
+        <circle cx={leftEyeCx + 2} cy={eyeCy - 2.5} r="1.6" fill="#FBFAF3" />
+        <ellipse cx={rightEyeCx} cy={eyeCy} rx="9" ry={eyeRy} fill="#FBFAF3" />
+        <circle cx={rightEyeCx} cy={eyeCy} r="5" fill={lineColor} />
+        <circle cx={rightEyeCx + 2} cy={eyeCy - 2.5} r="1.6" fill="#FBFAF3" />
+
+        {/* Subtle nose — a soft shadow, not a hard line */}
+        <path d="M 97 108 Q 100 112 103 108" stroke={lineColor} strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.35" />
+
         <path d={mouthPath} stroke={lineColor} strokeWidth="4" strokeLinecap="round" fill="none" opacity="0.7" />
       </svg>
 
