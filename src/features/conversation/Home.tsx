@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { UserProfile } from '@/types'
 import { unlockAudio } from '@/voice'
-import { LocalMemoryService } from '@/services/memory/MemoryService'
 import { MoodCheckIn } from './MoodCheckIn'
 
 interface HomeProps {
@@ -15,27 +14,6 @@ export function Home({ profile, onStart }: HomeProps) {
   const [text, setText] = useState('')
   const name = profile.preferredName ? `, ${profile.preferredName}` : ''
 
-  // Memory extraction runs in the background after Close and takes a real
-  // API round-trip (a few seconds) to finish. Home was previously reading
-  // localStorage exactly once, at the instant it first rendered — meaning
-  // it always missed the result, which lands afterward. This polls for a
-  // short window so the debug panel actually catches it when it arrives.
-  const [storedMemories, setStoredMemories] = useState(() => new LocalMemoryService().getAll())
-  const [extractionDebug, setExtractionDebug] = useState(() => localStorage.getItem('mindtip_extraction_debug'))
-
-  useEffect(() => {
-    const refresh = () => {
-      setStoredMemories(new LocalMemoryService().getAll())
-      setExtractionDebug(localStorage.getItem('mindtip_extraction_debug'))
-    }
-    const interval = setInterval(refresh, 1000)
-    const timeout = setTimeout(() => clearInterval(interval), 15000) // stop polling after 15s
-    return () => {
-      clearInterval(interval)
-      clearTimeout(timeout)
-    }
-  }, [])
-
   const handleMoodSubmit = (message: string) => {
     // Must be called synchronously inside this real tap to satisfy the
     // browser's autoplay policy — it unlocks audio playback for the whole
@@ -48,16 +26,6 @@ export function Home({ profile, onStart }: HomeProps) {
   return (
     <div className="min-h-dvh bg-canvas flex flex-col px-8 py-16 max-w-sm mx-auto">
       <p className="font-sans text-[13px] tracking-[0.08em] text-mist">MindTip</p>
-
-      {/* TEMPORARY — remove once memory extraction is confirmed working. Placed
-          at the very top so it's visible with zero scrolling. */}
-      <div className="mt-2 mb-4 text-[11px] text-bronze bg-panel/80 rounded-lg px-3 py-2">
-        🔧 {storedMemories.length} memor{storedMemories.length === 1 ? 'y' : 'ies'} stored
-        {storedMemories.map(m => (
-          <div key={m.id}>• [{m.type}] {m.content}</div>
-        ))}
-        {extractionDebug && <div className="mt-1 text-mist">Last extraction: {extractionDebug}</div>}
-      </div>
 
       <div className="flex-1 flex flex-col justify-center -mt-8">
         <h1 className="font-display font-light text-[30px] leading-snug text-ivory mb-10 text-center">
