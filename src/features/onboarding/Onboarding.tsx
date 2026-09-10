@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { SupportStyle, UserProfile } from '@/types'
+import type { UserProfile } from '@/types'
 import { HELPS_OPTIONS, TRIGGER_OPTIONS, UNHELPFUL_OPTIONS } from '@/lib/constants'
 import { TextToggle } from '@/components/ui/TextToggle'
 import { Button } from '@/components/ui/Button'
@@ -87,27 +87,21 @@ function ConstellationField({
   )
 }
 
-const SUPPORT_STYLES: { value: SupportStyle; label: string; description: string }[] = [
-  { value: 'validate_first', label: 'Validate me first', description: 'Let me feel heard before we talk about what to do.' },
-  { value: 'action_first', label: 'Give me the plan', description: 'Skip ahead — tell me what to actually do.' },
-  { value: 'blend', label: 'A little of both', description: 'Quick acknowledgment, then straight to action.' }
-]
-
-// Five steps: name, triggers (constellation), support style (unchanged),
-// helps (constellation), what doesn't help (unchanged). Proactive
-// check-ins was removed entirely — confirmed via a full codebase search
-// that nothing outside this file ever read that field, so it wasn't yet a
-// meaningful feature; the profile field itself still exists on the type
-// and is just always set to false now, keeping this change isolated to
-// this one file.
-const TOTAL_STEPS = 5
-type Step = 0 | 1 | 2 | 3 | 4
+// Four steps: name, triggers (constellation), helps (constellation), what
+// doesn't help. Support style was removed entirely — confirmed it's
+// actively used in the system prompt (unlike proactive check-ins, which
+// was truly inert), but 'blend' already matches the app's own stated
+// default philosophy ("brief validation, then fast action"), so everyone
+// now simply gets that baseline instead of being asked to choose before
+// their first conversation. Proactive check-ins was removed earlier for
+// the same reason as before (confirmed unused anywhere in the app).
+const TOTAL_STEPS = 4
+type Step = 0 | 1 | 2 | 3
 
 export function Onboarding({ onComplete }: OnboardingProps) {
   const [step, setStep] = useState<Step>(0)
   const [preferredName, setPreferredName] = useState('')
   const [triggers, setTriggers] = useState<string[]>([])
-  const [supportStyle, setSupportStyle] = useState<SupportStyle>('blend')
   const [helps, setHelps] = useState<string[]>([])
   const [unhelpful, setUnhelpful] = useState<string[]>([])
 
@@ -119,7 +113,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     const profile: UserProfile = {
       id: crypto.randomUUID(),
       preferredName: preferredName.trim() || undefined,
-      supportStyle,
+      supportStyle: 'blend',
       triggers,
       whatHelps: helps,
       whatDoesntHelp: unhelpful,
@@ -172,25 +166,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
         {step === 2 && (
           <div>
-            <h1 className="font-display font-light text-[30px] leading-snug text-ivory mb-10">When something's off, what do you want first?</h1>
-            <div>
-              {SUPPORT_STYLES.map((s, i) => (
-                <button
-                  key={s.value}
-                  onClick={() => setSupportStyle(s.value)}
-                  style={{ borderTop: i === 0 ? 'none' : '1px solid rgba(37,56,58,0.08)' }}
-                  className="w-full text-left py-4"
-                >
-                  <p className={`text-[19px] transition-colors duration-300 ${supportStyle === s.value ? 'text-bronze' : 'text-ivory'}`}>{s.label}</p>
-                  <p className="text-[14px] text-mist mt-1">{s.description}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div>
             <h1 className="font-display font-light text-[26px] leading-snug text-ivory mb-1">What lights your way?</h1>
             <p className="text-mist text-[13px] mb-4">Tap what's helped before.</p>
             <ConstellationField
@@ -203,7 +178,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           </div>
         )}
 
-        {step === 4 && (
+        {step === 3 && (
           <div>
             <h1 className="font-display font-light text-[30px] leading-snug text-ivory mb-10">Anything that never helps?</h1>
             <div className="flex flex-wrap gap-x-7 gap-y-5">
@@ -219,7 +194,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         {step > 0 ? (
           <Button variant="ghost" onClick={() => setStep((s => (s - 1) as Step)(step))}>Back</Button>
         ) : <span />}
-        {step < 4 ? (
+        {step < 3 ? (
           <Button onClick={() => setStep((s => (s + 1) as Step)(step))}>{step === 1 ? 'Save my sky' : 'Continue'}</Button>
         ) : (
           <Button onClick={finish}>Start</Button>
