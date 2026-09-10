@@ -35,12 +35,23 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
   const [reflectionReady, setReflectionReady] = useState(false)
-  const [reflectionDebug, setReflectionDebug] = useState<string>('')
   const started = useRef(false)
 
   const send = async (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || isThinking) return
+
+    // If the invitation is currently showing and the person's reply is a
+    // short, clear acceptance, treat it the same as tapping the visual
+    // card — this is the only way someone in a fully hands-free voice
+    // conversation can actually act on an invitation they never see on
+    // screen. A longer reply (even one starting with "yes") falls through
+    // to a normal turn instead, so real answers never get hijacked.
+    const isSpokenAcceptance = /^(yes|yeah|yep|sure|okay|ok|please|show me|let'?s see it|go ahead)\.?$/i.test(trimmed)
+    if (reflectionReady && isSpokenAcceptance) {
+      onReflectionReady(messages)
+      return
+    }
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -93,7 +104,6 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     }
     setIsThinking(false)
     setReflectionReady(response.reflectionReady ?? false)
-    setReflectionDebug(`reflectionReady=${JSON.stringify(response.reflectionReady)} (raw response keys: ${Object.keys(response).join(', ')})`)
 
     setMessages(prev => [
       ...prev,
@@ -110,7 +120,11 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
       memory.remember('effective_strategy', response.tip.action, 0.6, 'conversation')
     }
 
-    void voice.speakResponse(response.replyText)
+    void voice.speakResponse(
+      response.reflectionReady
+        ? `${response.replyText} I think we've uncovered something worth reflecting on — say "yes" if you'd like to see it, or just keep going.`
+        : response.replyText
+    )
   }
 
   const voice = useVoiceConversation({ onUserSpeech: send })
@@ -195,13 +209,6 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
           <button onClick={handleExit} className="text-[13px] text-mist hover:text-bronze transition-colors duration-300">Close</button>
         </div>
       </header>
-
-      {/* TEMPORARY — remove once reflectionReady is confirmed firing correctly. */}
-      {reflectionDebug && (
-        <p className="px-8 py-2 text-[11px] text-mist bg-panel/60 break-words">
-          🔧 {reflectionDebug}
-        </p>
-      )}
 
       <div className="flex-1 overflow-y-auto px-8 py-10 flex flex-col gap-6">
         {messages.map(m => (
