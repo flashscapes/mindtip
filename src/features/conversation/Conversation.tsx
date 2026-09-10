@@ -96,7 +96,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
       response = await ai.generateResponse({
         profile,
         relevantMemories,
-        recentMessages: messages.slice(-6),
+        recentMessages: messages,
         currentMessage: trimmed
       })
     } catch (err) {
