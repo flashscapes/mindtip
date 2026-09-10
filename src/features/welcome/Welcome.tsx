@@ -20,13 +20,14 @@ export function Welcome({ onComplete }: WelcomeProps) {
   const { headline, body } = STEPS[step]
 
   return (
-    <div className="relative min-h-dvh flex flex-col items-center justify-center px-8 overflow-hidden bg-gradient-to-br from-[#E9F5F3] via-[#DCEFEC] to-[#CFEAE5]">
-      {/* Soft abstract "aurora" background — stays inside the app's own aqua/bronze palette rather than a stock photo, so it's licence-free and always matches the brand. */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-24 -left-20 w-80 h-80 rounded-full bg-[#7FCFC0] opacity-40 blur-3xl" />
-        <div className="absolute top-1/3 -right-24 w-96 h-96 rounded-full bg-[#B8935A] opacity-25 blur-3xl" />
-        <div className="absolute -bottom-32 left-1/4 w-96 h-96 rounded-full bg-[#4FAE9E] opacity-30 blur-3xl" />
-      </div>
+    <div className="relative min-h-dvh flex flex-col items-center justify-center px-8 overflow-hidden">
+      {/* Nature photo background */}
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: "url('/images/welcome-mountains.jpg')" }}
+      />
+      {/* Muted color wash — softens the photo's raw saturation and keeps it inside the app's own aqua palette, rather than a vivid, high-contrast travel photo look */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#E9F5F3]/70 via-[#DCEFEC]/55 to-[#CFEAE5]/80" />
 
       {/* Frosted glass card */}
       <div className="relative z-10 w-full max-w-sm bg-white/45 backdrop-blur-xl border border-white/60 rounded-[28px] shadow-[0_20px_60px_-15px_rgba(37,56,58,0.25)] px-10 py-14 text-center">
