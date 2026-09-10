@@ -17,10 +17,14 @@ body {
   * { animation: none !important; transition: none !important; }
 }
 
-@keyframes mindtip-breathe {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.04); }
+@keyframes mindtip-heartbeat {
+  0% { transform: scale(1); }
+  12% { transform: scale(1.06); }
+  24% { transform: scale(1); }
+  36% { transform: scale(1.06); }
+  60% { transform: scale(1); }
+  100% { transform: scale(1); }
 }
 .mindtip-orb {
-  animation: mindtip-breathe 6s ease-in-out infinite;
+  animation: mindtip-heartbeat 1.3s ease-in-out infinite;
 }
