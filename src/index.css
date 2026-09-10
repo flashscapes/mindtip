@@ -16,3 +16,11 @@ body {
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+@keyframes mindtip-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+.mindtip-orb {
+  animation: mindtip-breathe 6s ease-in-out infinite;
+}
