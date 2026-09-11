@@ -51,16 +51,16 @@ function ConstellationField({
     <svg
       viewBox="0 0 300 280"
       className="w-full rounded-2xl"
-      style={{ background: `radial-gradient(circle at 50% 45%, ${orbColor}33, #0A1A1C)` }}
+      style={{ background: `radial-gradient(circle at 50% 45%, ${orbColor}33, #060F10)` }}
     >
       {options.map((opt, i) => {
         const p = STAR_POSITIONS[i]
         if (!p || !selected.includes(opt)) return null
-        return <line key={`line-${opt}`} x1={p.x} y1={p.y} x2={ORB_X} y2={ORB_Y} stroke={color} strokeWidth="1.8" opacity="0.85" />
+        return <line key={`line-${opt}`} x1={p.x} y1={p.y} x2={ORB_X} y2={ORB_Y} stroke={color} strokeWidth="1.8" opacity="0.95" />
       })}
 
       <circle cx={ORB_X} cy={ORB_Y} r="13" fill={orbColor} />
-      <circle cx={ORB_X} cy={ORB_Y} r="13" fill="none" stroke={color} strokeWidth="2" opacity="0.65" />
+      <circle cx={ORB_X} cy={ORB_Y} r="13" fill="none" stroke={color} strokeWidth="2" opacity="0.75" />
 
       {options.map((opt, i) => {
         const p = STAR_POSITIONS[i]
@@ -69,14 +69,14 @@ function ConstellationField({
         return (
           <g key={opt} onClick={() => onToggle(opt)} style={{ cursor: 'pointer' }}>
             <circle cx={p.x} cy={p.y} r="22" fill="transparent" />
-            <circle cx={p.x} cy={p.y} r={isSelected ? 7 : 4} fill={color} opacity={isSelected ? 1 : 0.65} />
+            <circle cx={p.x} cy={p.y} r={isSelected ? 7 : 4} fill={color} opacity={isSelected ? 1 : 0.75} />
             <text
               x={p.x}
               y={p.y + p.labelDy}
               fill={color}
               fontSize={isSelected ? 12 : 11}
               textAnchor="middle"
-              opacity={isSelected ? 1 : 0.85}
+              opacity={isSelected ? 1 : 0.95}
             >
               {opt}
             </text>
@@ -132,7 +132,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       />
       <div className="absolute inset-0 bg-gradient-to-b from-[#E9F5F3]/25 via-[#DCEFEC]/18 to-[#CFEAE5]/32" />
 
-      <div className="relative z-10 w-full max-w-sm bg-white/92 backdrop-blur-xl border border-white/95 rounded-[28px] shadow-[0_20px_60px_-15px_rgba(37,56,58,0.25)] px-8 py-12 flex flex-col justify-between" style={{ minHeight: '520px' }}>
+      <div className="relative z-10 w-full max-w-sm rounded-[28px] px-8 py-12 flex flex-col justify-between" style={{ minHeight: '520px', background: 'rgba(255,255,255,0.88)', boxShadow: '0 26px 60px -12px rgba(0,0,0,0.45), 0 6px 16px -4px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.05)' }}>
       <div>
         <p className="font-sans text-[13px] tracking-[0.08em] text-mist mb-6">{step + 1} of {TOTAL_STEPS}</p>
 
@@ -154,13 +154,15 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           <div>
             <h1 className="font-display font-light text-[26px] leading-snug text-ivory mb-1">Let's map your inner sky.</h1>
             <p className="text-mist text-[13px] mb-4">Tap what's true for you.</p>
-            <ConstellationField
-              options={TRIGGER_OPTIONS}
-              selected={triggers}
-              onToggle={v => toggle(triggers, setTriggers, v)}
-              color="#D9BE8F"
-              orbColor="#4FAE9E"
-            />
+            <div className="-mx-5">
+              <ConstellationField
+                options={TRIGGER_OPTIONS}
+                selected={triggers}
+                onToggle={v => toggle(triggers, setTriggers, v)}
+                color="#D9BE8F"
+                orbColor="#4FAE9E"
+              />
+            </div>
           </div>
         )}
 
@@ -168,13 +170,15 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           <div>
             <h1 className="font-display font-light text-[26px] leading-snug text-ivory mb-1">What lights your way?</h1>
             <p className="text-mist text-[13px] mb-4">Tap what's helped before.</p>
-            <ConstellationField
-              options={HELPS_OPTIONS}
-              selected={helps}
-              onToggle={v => toggle(helps, setHelps, v)}
-              color="#7FCFC0"
-              orbColor="#B8935A"
-            />
+            <div className="-mx-5">
+              <ConstellationField
+                options={HELPS_OPTIONS}
+                selected={helps}
+                onToggle={v => toggle(helps, setHelps, v)}
+                color="#7FCFC0"
+                orbColor="#B8935A"
+              />
+            </div>
           </div>
         )}
 
