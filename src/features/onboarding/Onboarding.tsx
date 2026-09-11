@@ -143,7 +143,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       />
       <div className="absolute inset-0 bg-gradient-to-b from-[#E9F5F3]/25 via-[#DCEFEC]/18 to-[#CFEAE5]/32" />
 
-      <div className="relative z-10 w-full max-w-sm rounded-[28px] px-8 py-12 flex flex-col justify-between" style={{ minHeight: '520px', background: 'rgba(255,255,255,0.88)', boxShadow: '0 26px 60px -12px rgba(0,0,0,0.45), 0 6px 16px -4px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.05)' }}>
+      <div className="relative z-10 w-full max-w-sm rounded-[28px] px-[30px] py-[46px] flex flex-col justify-between" style={{ minHeight: '495px', background: 'rgba(255,255,255,0.88)', boxShadow: '0 26px 60px -12px rgba(0,0,0,0.45), 0 6px 16px -4px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.05)' }}>
       <div>
         <p className="font-sans text-[13px] tracking-[0.08em] text-mist mb-6">{step + 1} of {TOTAL_STEPS}</p>
 
@@ -164,7 +164,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         {step === 1 && (
           <div>
             <h1 className="font-display font-light text-[26px] leading-snug text-ivory mb-1">Let's map your inner sky.</h1>
-            <p className="text-mist text-[13px] mb-4">Tap what's true for you.</p>
+            <p className="text-mist text-[13px] mb-4">Tap what weighs on you.</p>
             <div className="-mx-5">
               <ConstellationField
                 options={TRIGGER_OPTIONS}
