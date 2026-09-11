@@ -35,6 +35,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const formData = new FormData();
     formData.append('file', new Blob([new Uint8Array(audioBuffer)], { type: 'audio/webm' }), 'speech.webm');
     formData.append('model', 'whisper-large-v3-turbo');
+    // Both measurably improve accuracy over relying on auto-detection alone,
+    // especially on short or quiet clips — a language hint skips language
+    // auto-detection entirely, and a short context prompt biases decoding
+    // toward the kind of vocabulary this app actually hears.
+    formData.append('language', 'en');
+    formData.append('prompt', 'A reflective conversation about feelings, relationships, work, and daily life.');
 
     const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',

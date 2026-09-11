@@ -97,7 +97,7 @@ class VoiceActivityDetector {
       onSpeechEnd: opts.onSpeechEnd ?? (() => {}),
       onDebug: opts.onDebug ?? (() => {}),
       silenceThreshold: opts.silenceThreshold ?? 5,
-      silenceDurationMs: opts.silenceDurationMs ?? 1200,
+      silenceDurationMs: opts.silenceDurationMs ?? 2000,
       minSpeechDurationMs: opts.minSpeechDurationMs ?? 250,
     };
   }
