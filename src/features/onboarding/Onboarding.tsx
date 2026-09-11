@@ -132,7 +132,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       />
       <div className="absolute inset-0 bg-gradient-to-b from-[#E9F5F3]/25 via-[#DCEFEC]/18 to-[#CFEAE5]/32" />
 
-      <div className="relative z-10 w-full max-w-sm bg-white/78 backdrop-blur-xl border border-white/85 rounded-[28px] shadow-[0_20px_60px_-15px_rgba(37,56,58,0.25)] px-8 py-12 flex flex-col justify-between" style={{ minHeight: '520px' }}>
+      <div className="relative z-10 w-full max-w-sm bg-white/92 backdrop-blur-xl border border-white/95 rounded-[28px] shadow-[0_20px_60px_-15px_rgba(37,56,58,0.25)] px-8 py-12 flex flex-col justify-between" style={{ minHeight: '520px' }}>
       <div>
         <p className="font-sans text-[13px] tracking-[0.08em] text-mist mb-6">{step + 1} of {TOTAL_STEPS}</p>
 

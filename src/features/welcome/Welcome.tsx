@@ -30,7 +30,7 @@ export function Welcome({ onComplete }: WelcomeProps) {
       <div className="absolute inset-0 bg-gradient-to-b from-[#E9F5F3]/25 via-[#DCEFEC]/18 to-[#CFEAE5]/32" />
 
       {/* Frosted glass card */}
-      <div className="relative z-10 w-full max-w-sm bg-white/78 backdrop-blur-xl border border-white/85 rounded-[28px] shadow-[0_20px_60px_-15px_rgba(37,56,58,0.25)] px-10 py-14 text-center">
+      <div className="relative z-10 w-full max-w-sm bg-white/92 backdrop-blur-xl border border-white/95 rounded-[28px] shadow-[0_20px_60px_-15px_rgba(37,56,58,0.25)] px-10 py-14 text-center">
         <p className="font-sans text-[13px] tracking-[0.08em] text-mist mb-8">{step + 1} of 2</p>
         <p className="font-display font-light text-[30px] leading-snug text-ivory mb-4">{headline}</p>
         <p className="font-sans text-[15px] text-mist leading-relaxed mb-12">{body}</p>
