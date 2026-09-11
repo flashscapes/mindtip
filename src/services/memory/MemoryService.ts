@@ -34,7 +34,24 @@ export class LocalMemoryService implements MemoryService {
     if (!raw) return []
     try {
       const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) ? (parsed as Memory[]) : []
+      if (!Array.isArray(parsed)) return []
+      // Per-entry validation — a single corrupted record (missing/invalid
+      // content, wrong types) must not be allowed through: getRelevant()
+      // calls .toLowerCase() on every memory's content on every turn, so
+      // an entry with a non-string content would throw uncaught and break
+      // the current conversation, not just fail to load quietly.
+      return (parsed as unknown[]).filter((m): m is Memory => {
+        if (!m || typeof m !== 'object') return false
+        const r = m as Record<string, unknown>
+        return (
+          typeof r.id === 'string' &&
+          typeof r.type === 'string' &&
+          typeof r.content === 'string' && r.content.length > 0 &&
+          typeof r.confidence === 'number' &&
+          typeof r.active === 'boolean' &&
+          typeof r.createdAt === 'string'
+        )
+      })
     } catch (err) {
       console.error('Stored memories were corrupted and could not be read — starting fresh.', err)
       return []
@@ -42,7 +59,16 @@ export class LocalMemoryService implements MemoryService {
   }
 
   private write(memories: Memory[]) {
-    localStorage.setItem(STORAGE_KEYS.memories, JSON.stringify(memories))
+    try {
+      localStorage.setItem(STORAGE_KEYS.memories, JSON.stringify(memories))
+    } catch (err) {
+      // Distinct from an extraction/API failure — this is specifically the
+      // local save step failing (e.g. storage quota exceeded), so it gets
+      // its own clear log rather than bubbling up to be misreported as an
+      // extraction failure by the caller.
+      console.error('Failed to save memory to local storage:', err)
+      throw err
+    }
   }
 
   getAll(): Memory[] {

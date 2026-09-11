@@ -179,7 +179,12 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
    * and a failure here is silent to the user (logged only), matching how
    * the server route itself fails soft.
    */
+  const extractionStarted = useRef(false)
+
   const extractMemoriesFromThisConversation = async () => {
+    if (extractionStarted.current) return // rapid double-tap on Close — never run this twice
+    extractionStarted.current = true
+
     if (messages.length < 2) {
       localStorage.setItem('mindtip_extraction_debug', `Skipped: only ${messages.length} message(s), need 2+`)
       return
