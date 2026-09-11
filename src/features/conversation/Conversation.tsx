@@ -33,6 +33,20 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
   const safety = useMemo(() => new SafetyService(), [])
 
   const [messages, setMessages] = useState<Message[]>(seedMessages ?? [])
+  // Mirrors `messages` synchronously. The voice loop can end up re-invoking
+  // an old `send` closure (see the fix note at its call sites below) whose
+  // captured `messages` variable is permanently frozen from whenever that
+  // closure was created — this ref is what `recentMessages` actually reads
+  // from instead, so it's always the true current value regardless of
+  // which closure generation happens to be executing.
+  const messagesRef = useRef<Message[]>(messages)
+  const setMessagesAndRef = (updater: (prev: Message[]) => Message[]) => {
+    setMessages(prev => {
+      const next = updater(prev)
+      messagesRef.current = next
+      return next
+    })
+  }
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
   // True only in the single turn right after MindTip has verbally
@@ -63,7 +77,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     // Lightweight, dev-only visibility into what's actually being sent —
     // exactly what Phase 11 of the audit asked for, kept minimal rather
     // than a full diagnostics panel.
-    console.debug(`[MindTip] ${messages.length} messages in this conversation`)
+    console.debug(`[MindTip] ${messagesRef.current.length} messages in this conversation`)
   }
 
   const send = async (text: string) => {
@@ -88,14 +102,14 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
       content: trimmed,
       createdAt: new Date().toISOString()
     }
-    setMessages(prev => [...prev, userMessage])
+    setMessagesAndRef(prev => [...prev, userMessage])
     setInput('')
     setJustSuggested(false)
 
     const safetyResult = safety.check(trimmed)
     if (safetyResult.level === 'crisis') {
       setJustSuggested(false)
-      setMessages(prev => [
+      setMessagesAndRef(prev => [
         ...prev,
         {
           id: crypto.randomUUID(),
@@ -113,8 +127,8 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     // sent, live, on screen (not console, since this needs to be visible
     // on iPhone). Remove once the actual failing-turn payload has been seen.
     setLastRequestDebug(
-      `HISTORY (${messages.length} msgs): ` +
-      messages.map(m => `[${m.role}] ${m.content.slice(0, 40)}`).join(' | ') +
+      `HISTORY (${messagesRef.current.length} msgs): ` +
+      messagesRef.current.map(m => `[${m.role}] ${m.content.slice(0, 40)}`).join(' | ') +
       ` || MEMORIES (${relevantMemories.length}): ` +
       (relevantMemories.length ? relevantMemories.map(m => m.content).join(' | ') : 'none') +
       ` || CURRENT: ${trimmed}`
@@ -124,13 +138,13 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
       response = await ai.generateResponse({
         profile,
         relevantMemories,
-        recentMessages: messages,
+        recentMessages: messagesRef.current,
         currentMessage: trimmed
       })
     } catch (err) {
       setIsThinking(false)
       console.error('AI response generation failed:', err)
-      setMessages(prev => [
+      setMessagesAndRef(prev => [
         ...prev,
         {
           id: crypto.randomUUID(),
@@ -149,11 +163,11 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     // equality, not >=) so it never repeats on later turns — the header
     // action remains available the whole time regardless, so missing or
     // ignoring this moment costs nothing.
-    const userMessageCount = messages.filter(m => m.role === 'user').length + 1
+    const userMessageCount = messagesRef.current.filter(m => m.role === 'user').length
     const justCrossedSuggestionThreshold = userMessageCount === 4
     setJustSuggested(justCrossedSuggestionThreshold)
 
-    setMessages(prev => [
+    setMessagesAndRef(prev => [
       ...prev,
       {
         id: crypto.randomUUID(),
