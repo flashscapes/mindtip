@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Message, UserProfile } from '@/types'
 import { LocalMemoryService } from '@/services/memory/MemoryService'
 import { createReflectionGenerator, type ReflectionResult } from '@/services/reflection'
+import { tapHaptic } from '@/lib/haptics'
 
 interface ReflectionProps {
   messages: Message[]
@@ -105,7 +106,7 @@ export function Reflection({ messages, profile, onContinueTalking, onExit }: Ref
               {nodes.map(node => (
                 <div key={node.key} className="bg-white/85 rounded-2xl overflow-hidden">
                   <button
-                    onClick={() => setOpenNode(openNode === node.key ? null : node.key)}
+                    onClick={() => { tapHaptic(); setOpenNode(openNode === node.key ? null : node.key) }}
                     className="w-full flex items-center justify-between px-5 py-4 text-left"
                   >
                     <span className="font-sans text-[14px] text-ivory">{node.label}</span>

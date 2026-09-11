@@ -1,3 +1,4 @@
+import { tapHaptic } from '@/lib/haptics'
 import { useState } from 'react'
 import type { UserProfile } from '@/types'
 import { HELPS_OPTIONS, TRIGGER_OPTIONS, UNHELPFUL_OPTIONS } from '@/lib/constants'
@@ -67,9 +68,19 @@ function ConstellationField({
         if (!p) return null
         const isSelected = selected.includes(opt)
         return (
-          <g key={opt} onClick={() => onToggle(opt)} style={{ cursor: 'pointer' }}>
+          <g key={opt} onClick={() => { tapHaptic(); onToggle(opt) }} style={{ cursor: 'pointer' }}>
             <circle cx={p.x} cy={p.y} r="22" fill="transparent" />
-            <circle cx={p.x} cy={p.y} r={isSelected ? 7 : 4} fill={color} opacity={isSelected ? 1 : 0.75} />
+            <circle
+              cx={p.x}
+              cy={p.y}
+              r={isSelected ? 7 : 4}
+              fill={color}
+              opacity={isSelected ? 1 : 0.75}
+              style={{
+                transition: 'r 0.35s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s',
+                filter: isSelected ? `drop-shadow(0 0 6px ${color})` : 'none'
+              }}
+            />
             <text
               x={p.x}
               y={p.y + p.labelDy}
