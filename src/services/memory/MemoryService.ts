@@ -99,7 +99,17 @@ export class LocalMemoryService implements MemoryService {
       return { memory, score }
     })
     const withMatches = scored.filter(s => s.score > 0)
-    if (withMatches.length === 0) return [] // no genuine overlap — say nothing rather than guess
+    if (withMatches.length === 0) {
+      // No literal word overlap — but a vague, natural follow-up ("what was
+      // causing that?") will never share words with a specifically-worded
+      // memory ("neck pain from poor posture"), even when it's exactly what
+      // the person means. Falling back to the single most recent memory is
+      // a much safer bet than silence for this specific case, without
+      // reintroducing the earlier bug (returning many irrelevant matches).
+      const all = this.getAll()
+      if (all.length === 0) return []
+      return [all.reduce((newest, m) => (m.createdAt > newest.createdAt ? m : newest))]
+    }
     return withMatches
       .sort((a, b) => b.score - a.score || b.memory.confidence - a.memory.confidence)
       .slice(0, limit)
