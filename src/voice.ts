@@ -223,17 +223,21 @@ interface UseVoiceConversationOptions {
 export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptions) {
   const [state, setState] = useState<ConversationState>('idle');
   const [enabled, setEnabled] = useState(false);
-  const [debugLog, setDebugLog] = useState<string>('');
+  const [debugLog, setDebugLog] = useState<string[]>([]);
+  const logDebug = useCallback((msg: string) => {
+    const t = new Date().toISOString().slice(11, 19);
+    setDebugLog(prev => [...prev.slice(-24), `${t} ${msg}`]);
+  }, []);
   const enabledRef = useRef(false);
   const vadRef = useRef<VoiceActivityDetector | null>(null);
 
   const startListening = useCallback(() => {
     if (!enabledRef.current) return;
     setState('listening');
-    setDebugLog('Listening for your voice…');
+    logDebug('Listening for your voice…');
 
     const vad = new VoiceActivityDetector({
-      onDebug: setDebugLog,
+      onDebug: logDebug,
       onSpeechEnd: async (blob, durationMs) => {
         // A clip shorter than this is almost certainly a noise blip, not a
         // word — sending it to Whisper risks a hallucinated transcription
@@ -241,13 +245,13 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
         // treated as a real reply and loop the conversation on nothing said.
         const MIN_CLIP_MS = 400;
         if (durationMs < MIN_CLIP_MS) {
-          setDebugLog(`Clip too short (${durationMs.toFixed(0)}ms) — listening again`);
+          logDebug(`Clip too short (${durationMs.toFixed(0)}ms) — listening again`);
           startListening();
           return;
         }
 
         setState('transcribing');
-        setDebugLog('Sending audio to /api/transcribe…');
+        logDebug('Sending audio to /api/transcribe…');
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -255,12 +259,12 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
           const res = await fetch('/api/transcribe', { method: 'POST', body: blob, signal: controller.signal });
           if (!res.ok) {
             const body = await res.text().catch(() => '');
-            setDebugLog(`Transcribe failed: HTTP ${res.status} — ${body.slice(0, 200)}`);
+            logDebug(`Transcribe failed: HTTP ${res.status} — ${body.slice(0, 200)}`);
             startListening();
             return;
           }
           const { text } = (await res.json()) as { text?: string };
-          setDebugLog(`Transcribed: "${text ?? '(empty)'}"`);
+          logDebug(`Transcribed: "${text ?? '(empty)'}"`);
           if (text && text.trim()) {
             onUserSpeech(text.trim());
           } else {
@@ -268,7 +272,7 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
           }
         } catch (err) {
           const isTimeout = err instanceof Error && err.name === 'AbortError';
-          setDebugLog(isTimeout ? 'Transcription timed out after 15s — listening again' : `Transcription error: ${err instanceof Error ? err.message : String(err)}`);
+          logDebug(isTimeout ? 'Transcription timed out after 15s — listening again' : `Transcription error: ${err instanceof Error ? err.message : String(err)}`);
           if (!isTimeout) console.error('Transcription failed:', err);
           startListening();
         } finally {
@@ -282,7 +286,7 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
       setTimeout(() => reject(new Error('Mic access timed out after 10s')), 10000)
     );
     Promise.race([vad.start(), micTimeout]).catch((err) => {
-      setDebugLog(`Mic access failed: ${err instanceof Error ? err.message : String(err)}`);
+      logDebug(`Mic access failed: ${err instanceof Error ? err.message : String(err)}`);
       console.error('Mic access failed:', err);
       setState('idle');
     });
@@ -295,11 +299,11 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
    *  never used for anything — it just meant every voice-enabled conversation
    *  silently asked for the microphone twice in a row. */
   const enableVoiceConversation = useCallback(async () => {
-    setDebugLog('Enabling voice: unlocking audio…');
+    logDebug('Enabling voice: unlocking audio…');
     unlockAudio();
     enabledRef.current = true;
     setEnabled(true);
-    setDebugLog('Voice enabled');
+    logDebug('Voice enabled');
   }, []);
 
   const disableVoiceConversation = useCallback(() => {
@@ -313,14 +317,14 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
   const speakResponse = useCallback(
     async (text: string) => {
       if (!enabledRef.current) {
-        setDebugLog('speakResponse called but voice is not enabled — skipped');
+        logDebug('speakResponse called but voice is not enabled — skipped');
         return;
       }
       setState('speaking');
       try {
-        await speakText(text, setDebugLog);
+        await speakText(text, logDebug);
       } catch (err) {
-        setDebugLog(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        logDebug(`Error: ${err instanceof Error ? err.message : String(err)}`);
         console.error('Speech playback failed:', err);
       }
       startListening();

@@ -300,8 +300,12 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
           listening, so we can see real numbers instead of guessing at
           another threshold value. Remove once the right threshold is
           confirmed. */}
-      {voice.enabled && voice.debugLog && (
-        <p className="px-8 py-1 text-[11px] text-bronze bg-white/40 break-words">{voice.debugLog}</p>
+      {voice.enabled && voice.debugLog.length > 0 && (
+        <div className="px-8 py-2 bg-white/40 max-h-32 overflow-y-auto">
+          {voice.debugLog.map((line, i) => (
+            <p key={i} className="text-[10px] text-bronze break-words leading-relaxed">{line}</p>
+          ))}
+        </div>
       )}
 
       {/* TEMPORARY — the actual request contents from the last turn sent,
