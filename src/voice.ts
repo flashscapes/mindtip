@@ -96,7 +96,7 @@ class VoiceActivityDetector {
       onSpeechStart: opts.onSpeechStart ?? (() => {}),
       onSpeechEnd: opts.onSpeechEnd ?? (() => {}),
       onDebug: opts.onDebug ?? (() => {}),
-      silenceThreshold: opts.silenceThreshold ?? 3,
+      silenceThreshold: opts.silenceThreshold ?? 5,
       silenceDurationMs: opts.silenceDurationMs ?? 2000,
       minSpeechDurationMs: opts.minSpeechDurationMs ?? 250,
     };
@@ -288,14 +288,18 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     });
   }, [onUserSpeech]);
 
-  /** Call once, from a real tap. Grants mic access and unlocks audio for the whole session. */
+  /** Call once, from a real tap. Unlocks audio for the whole session — actual
+   *  mic access happens lazily on the first real startListening() call, which
+   *  already requests and handles it correctly on its own. This used to also
+   *  call getUserMedia() here, but that stream was discarded immediately and
+   *  never used for anything — it just meant every voice-enabled conversation
+   *  silently asked for the microphone twice in a row. */
   const enableVoiceConversation = useCallback(async () => {
-    setDebugLog('Enabling voice: unlocking audio + requesting mic…');
+    setDebugLog('Enabling voice: unlocking audio…');
     unlockAudio();
-    await navigator.mediaDevices.getUserMedia({ audio: true });
     enabledRef.current = true;
     setEnabled(true);
-    setDebugLog('Voice enabled — mic access granted');
+    setDebugLog('Voice enabled');
   }, []);
 
   const disableVoiceConversation = useCallback(() => {
