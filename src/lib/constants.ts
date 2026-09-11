@@ -1,7 +1,8 @@
 export const STORAGE_KEYS = {
   profile: 'mindtip.profile',
   memories: 'mindtip.memories',
-  conversation: 'mindtip.conversation'
+  conversation: 'mindtip.conversation',
+  experimentCache: 'mindtip.experimentCache'
 } as const
 
 export const QUICK_ACTIONS = [

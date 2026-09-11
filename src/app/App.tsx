@@ -76,7 +76,7 @@ export default function App() {
       />
     )
   } else if (profile) {
-    content = <Home profile={profile} onStart={handleStartConversation} />
+    content = <Home profile={profile} onStart={handleStartConversation} onExploreExperiment={handleContinueFromReflection} />
   } else {
     // Fallback: no profile somehow reached a screen that needs one.
     content = <Onboarding onComplete={handleOnboardingComplete} />

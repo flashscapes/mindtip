@@ -1,12 +1,19 @@
-import { useState } from 'react'
-import type { UserProfile } from '@/types'
+import { useEffect, useState } from 'react'
+import type { Message, UserProfile } from '@/types'
 import { unlockAudio } from '@/voice'
+import { LocalMemoryService } from '@/services/memory/MemoryService'
+import { createExperimentGenerator } from '@/services/experiment'
+import { STORAGE_KEYS } from '@/lib/constants'
 
 interface HomeProps {
   profile: UserProfile
   // `autoVoice` tells the caller to enable full hands-free voice for this
   // conversation before the first response ever arrives.
   onStart: (message: string, autoVoice?: boolean) => void
+  // Starts a conversation seeded with existing messages rather than a
+  // single user-voiced line — reuses the exact same mechanism already
+  // built for Reflection's "Continue talking".
+  onExploreExperiment: (seedMessages: Message[]) => void
 }
 
 // Each intention becomes the opening line of the conversation, written as
@@ -43,13 +50,86 @@ const INTENTIONS = [
 
 const DEFAULT_ORB_COLORS: readonly [string, string] = ['#9AD9CC', '#4FAE9E']
 
-export function Home({ profile, onStart }: HomeProps) {
+// --- Today's Experiment: caching + suppression -----------------------------
+// No scheduler, no background job — purely reactive, evaluated once per
+// Home mount. State machine, kept deliberately simple:
+//
+// - cutoff: ISO timestamp of the newest memory already considered. Only
+//   memories created after this trigger a fresh evaluation.
+// - experiment: the last generated text (or null), so a real experiment
+//   persists across re-renders within the same visit without re-fetching.
+// - shownPending: true once an experiment has been displayed but not yet
+//   engaged. If Home mounts again and this is still true, the previous one
+//   was ignored — that's what starts the suppression window.
+// - suppressVisitsRemaining: counts down on each Home mount; while > 0,
+//   Today's Experiment stays completely silent regardless of new memories.
+interface ExperimentCache {
+  cutoff: string
+  experiment: string | null
+  shownPending: boolean
+  suppressVisitsRemaining: number
+}
+
+function readExperimentCache(): ExperimentCache {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.experimentCache)
+    if (raw) return JSON.parse(raw) as ExperimentCache
+  } catch {
+    // fall through to default
+  }
+  return { cutoff: new Date(0).toISOString(), experiment: null, shownPending: false, suppressVisitsRemaining: 0 }
+}
+
+function writeExperimentCache(cache: ExperimentCache) {
+  localStorage.setItem(STORAGE_KEYS.experimentCache, JSON.stringify(cache))
+}
+
+export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
   const [selected, setSelected] = useState<string | null>(null)
   const [text, setText] = useState('')
+  const [experiment, setExperiment] = useState<string | null>(null)
   const name = profile.preferredName ? `, ${profile.preferredName}` : ''
 
   const activeIntention = INTENTIONS.find(i => i.key === selected)
   const [orbFrom, orbTo] = activeIntention?.colors ?? DEFAULT_ORB_COLORS
+
+  useEffect(() => {
+    const run = async () => {
+      const cache = readExperimentCache()
+
+      // Previous experiment was shown and never engaged — that's an ignore.
+      // Start the suppression window and say nothing this visit.
+      if (cache.shownPending) {
+        writeExperimentCache({ ...cache, experiment: null, shownPending: false, suppressVisitsRemaining: 3 })
+        return
+      }
+
+      // Still cooling down from a previous ignore.
+      if (cache.suppressVisitsRemaining > 0) {
+        writeExperimentCache({ ...cache, suppressVisitsRemaining: cache.suppressVisitsRemaining - 1 })
+        return
+      }
+
+      const memories = new LocalMemoryService().getAll()
+      const newest = memories.reduce((max, m) => (m.createdAt > max ? m.createdAt : max), cache.cutoff)
+      const hasNewMaterial = memories.some(m => m.createdAt > cache.cutoff)
+      if (!hasNewMaterial) return // nothing new since we last considered — stay quiet, no API call
+
+      const recentMemories = [...memories].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).slice(0, 5)
+      const result = await createExperimentGenerator().generate({ memories: recentMemories, profile })
+
+      writeExperimentCache({
+        cutoff: newest,
+        experiment: result.experiment,
+        shownPending: result.experiment !== null,
+        suppressVisitsRemaining: 0
+      })
+      if (result.experiment) setExperiment(result.experiment)
+    }
+    void run()
+    // Runs once per Home mount by design — this is the whole evaluation model.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleExplore = () => {
     if (!activeIntention) return
@@ -58,6 +138,21 @@ export function Home({ profile, onStart }: HomeProps) {
     // the mood check-in submit.
     unlockAudio()
     onStart(activeIntention.seed, true)
+  }
+
+  const handleExploreExperiment = () => {
+    if (!experiment) return
+    unlockAudio()
+    // Mark engaged (not ignored) before navigating away.
+    const cache = readExperimentCache()
+    writeExperimentCache({ ...cache, shownPending: false })
+    const seedMessage: Message = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: experiment,
+      createdAt: new Date().toISOString()
+    }
+    onExploreExperiment([seedMessage])
   }
 
   return (
@@ -143,6 +238,14 @@ export function Home({ profile, onStart }: HomeProps) {
             style={{ borderBottom: '1px solid rgba(37,56,58,0.14)' }}
           />
         </form>
+
+        {experiment && (
+          <button onClick={handleExploreExperiment} className="w-full text-left mt-8">
+            <p className="font-sans text-[10px] tracking-[0.08em] text-bronze mb-2">✦ TODAY'S EXPERIMENT</p>
+            <p className="font-display text-[14px] text-ivory leading-[1.7] mb-3">{experiment}</p>
+            <p className="font-sans text-[12px] text-bronze">Explore this →</p>
+          </button>
+        )}
       </div>
     </div>
   )
