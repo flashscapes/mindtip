@@ -41,6 +41,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
   // header action (see canReflect below) is always available regardless
   // of this value once there's enough conversation.
   const [justSuggested, setJustSuggested] = useState(false)
+  const [lastRequestDebug, setLastRequestDebug] = useState('')
   const started = useRef(false)
 
   // Emerging Insights unlocks once there's enough conversation to reflect
@@ -108,9 +109,16 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
 
     setIsThinking(true)
     const relevantMemories = memory.getRelevant(trimmed)
-    if (import.meta.env.DEV) {
-      console.debug(`[MindTip] Sending to model: ${messages.length} history messages, ${relevantMemories.length} relevant memories`)
-    }
+    // TEMPORARY real-evidence capture — shows exactly what's about to be
+    // sent, live, on screen (not console, since this needs to be visible
+    // on iPhone). Remove once the actual failing-turn payload has been seen.
+    setLastRequestDebug(
+      `HISTORY (${messages.length} msgs): ` +
+      messages.map(m => `[${m.role}] ${m.content.slice(0, 40)}`).join(' | ') +
+      ` || MEMORIES (${relevantMemories.length}): ` +
+      (relevantMemories.length ? relevantMemories.map(m => m.content).join(' | ') : 'none') +
+      ` || CURRENT: ${trimmed}`
+    )
     let response
     try {
       response = await ai.generateResponse({
@@ -280,6 +288,13 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
           confirmed. */}
       {voice.enabled && voice.debugLog && (
         <p className="px-8 py-1 text-[11px] text-bronze bg-white/40 break-words">{voice.debugLog}</p>
+      )}
+
+      {/* TEMPORARY — the actual request contents from the last turn sent,
+          so we can see real evidence instead of reconstructing it. Remove
+          once the failing-turn payload has actually been captured. */}
+      {lastRequestDebug && (
+        <p className="px-8 py-2 text-[10px] text-mist bg-white/60 break-words leading-relaxed">{lastRequestDebug}</p>
       )}
 
       <div className="flex-1 overflow-y-auto px-8 py-10 flex flex-col gap-6">
