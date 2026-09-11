@@ -7,6 +7,7 @@ import { SafetyService } from '@/services/safety/SafetyService'
 import { useVoiceConversation } from '@/voice'
 import { ChatBubble } from './ChatBubble'
 import { Button } from '@/components/ui/Button'
+import { STORAGE_KEYS } from '@/lib/constants'
 
 interface ConversationProps {
   profile: UserProfile
@@ -47,6 +48,22 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
   // timed invitation. Recomputed from current message count on every
   // render, so no separate state or one-time gating is needed.
   const canReflect = messages.filter(m => m.role === 'user').length >= 2
+
+  // Persist the in-progress conversation every time it changes, so a full
+  // page reload (a hard refresh, or iOS backgrounding/reloading the PWA
+  // under memory pressure) doesn't silently destroy it — App.tsx restores
+  // from this on mount. Cleared only when the conversation ends
+  // deliberately (see App.tsx's onExit), never on a reload.
+  useEffect(() => {
+    sessionStorage.setItem(STORAGE_KEYS.conversation, JSON.stringify(messages))
+  }, [messages])
+
+  if (import.meta.env.DEV) {
+    // Lightweight, dev-only visibility into what's actually being sent —
+    // exactly what Phase 11 of the audit asked for, kept minimal rather
+    // than a full diagnostics panel.
+    console.debug(`[MindTip] ${messages.length} messages in this conversation`)
+  }
 
   const send = async (text: string) => {
     const trimmed = text.trim()
@@ -91,6 +108,9 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
 
     setIsThinking(true)
     const relevantMemories = memory.getRelevant(trimmed)
+    if (import.meta.env.DEV) {
+      console.debug(`[MindTip] Sending to model: ${messages.length} history messages, ${relevantMemories.length} relevant memories`)
+    }
     let response
     try {
       response = await ai.generateResponse({

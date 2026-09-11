@@ -7,14 +7,42 @@ import { Home } from '@/features/conversation/Home'
 import { Conversation } from '@/features/conversation/Conversation'
 import { Reflection } from '@/features/reflection/Reflection'
 import { unlockAudio } from '@/voice'
+import { STORAGE_KEYS } from '@/lib/constants'
 
 type Screen = 'welcome' | 'onboarding' | 'home' | 'conversation' | 'reflection'
 
+// Reads back whatever Conversation.tsx last persisted, if anything — see
+// the audit note there. Returns null (not an empty array) when nothing
+// usable is stored, so callers can tell "no persisted conversation" apart
+// from "an empty one".
+function readPersistedConversation(): Message[] | null {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEYS.conversation)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Message[]
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null
+  } catch {
+    return null
+  }
+}
+
 export default function App() {
   const { profile, saveProfile } = useUserProfile()
-  const [screen, setScreen] = useState<Screen>(profile?.onboardingCompleted ? 'home' : 'welcome')
+
+  // On mount only: if a mid-conversation session survived a reload, resume
+  // directly into it instead of defaulting to Home. Both lazy initializers
+  // read the same persisted value once, at startup — never re-evaluated
+  // on normal in-app navigation.
+  const [screen, setScreen] = useState<Screen>(() => {
+    if (profile?.onboardingCompleted && readPersistedConversation()) return 'conversation'
+    return profile?.onboardingCompleted ? 'home' : 'welcome'
+  })
   const [initialMessage, setInitialMessage] = useState<string | undefined>()
-  const [seedMessages, setSeedMessages] = useState<Message[] | undefined>()
+  const [seedMessages, setSeedMessages] = useState<Message[] | undefined>(() => readPersistedConversation() ?? undefined)
+  // Never auto-start voice on a restored conversation — the browser's
+  // autoplay policy requires a fresh user gesture anyway, so this would
+  // silently fail. The restored transcript is shown as text; voice picks
+  // back up normally once the person taps to continue.
   const [autoVoiceStart, setAutoVoiceStart] = useState(false)
   const [reflectionMessages, setReflectionMessages] = useState<Message[]>([])
 
@@ -71,6 +99,7 @@ export default function App() {
           setInitialMessage(undefined)
           setSeedMessages(undefined)
           setAutoVoiceStart(false)
+          sessionStorage.removeItem(STORAGE_KEYS.conversation)
           setScreen('home')
         }}
       />
