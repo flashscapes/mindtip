@@ -55,7 +55,6 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
   // header action (see canReflect below) is always available regardless
   // of this value once there's enough conversation.
   const [justSuggested, setJustSuggested] = useState(false)
-  const [lastRequestDebug, setLastRequestDebug] = useState('')
   const started = useRef(false)
 
   // Emerging Insights unlocks once there's enough conversation to reflect
@@ -123,16 +122,6 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
 
     setIsThinking(true)
     const relevantMemories = memory.getRelevant(trimmed)
-    // TEMPORARY real-evidence capture — shows exactly what's about to be
-    // sent, live, on screen (not console, since this needs to be visible
-    // on iPhone). Remove once the actual failing-turn payload has been seen.
-    setLastRequestDebug(
-      `HISTORY (${messagesRef.current.length} msgs): ` +
-      messagesRef.current.map(m => `[${m.role}] ${m.content.slice(0, 40)}`).join(' | ') +
-      ` || MEMORIES (${relevantMemories.length}): ` +
-      (relevantMemories.length ? relevantMemories.map(m => m.content).join(' | ') : 'none') +
-      ` || CURRENT: ${trimmed}`
-    )
     let response
     try {
       response = await ai.generateResponse({
@@ -295,25 +284,6 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
           <button onClick={handleExit} className="text-[13px] text-mist hover:text-bronze transition-colors duration-300">Close</button>
         </div>
       </header>
-
-      {/* TEMPORARY diagnostic — shows the live mic level vs threshold while
-          listening, so we can see real numbers instead of guessing at
-          another threshold value. Remove once the right threshold is
-          confirmed. */}
-      {voice.enabled && voice.debugLog.length > 0 && (
-        <div className="px-8 py-2 bg-white/40 max-h-32 overflow-y-auto">
-          {voice.debugLog.map((line, i) => (
-            <p key={i} className="text-[10px] text-bronze break-words leading-relaxed">{line}</p>
-          ))}
-        </div>
-      )}
-
-      {/* TEMPORARY — the actual request contents from the last turn sent,
-          so we can see real evidence instead of reconstructing it. Remove
-          once the failing-turn payload has actually been captured. */}
-      {lastRequestDebug && (
-        <p className="px-8 py-2 text-[10px] text-mist bg-white/60 break-words leading-relaxed">{lastRequestDebug}</p>
-      )}
 
       <div className="flex-1 overflow-y-auto px-8 py-10 flex flex-col gap-6">
         {messages.map(m => (
