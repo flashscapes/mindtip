@@ -143,18 +143,14 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       />
       <div className="absolute inset-0 bg-gradient-to-b from-[#E9F5F3]/25 via-[#DCEFEC]/18 to-[#CFEAE5]/32" />
 
-      <div className="relative z-10 w-full max-w-sm rounded-[28px] px-[30px] py-[46px] flex flex-col justify-between" style={{ minHeight: '495px', background: 'rgba(255,255,255,0.88)', boxShadow: '0 26px 60px -12px rgba(0,0,0,0.45), 0 6px 16px -4px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.05)' }}>
+      <div className="relative z-10 w-full max-w-sm rounded-[36px] px-[30px] py-[46px] flex flex-col justify-between" style={{ minHeight: '495px', background: 'rgba(255,255,255,0.88)', boxShadow: '0 26px 60px -12px rgba(0,0,0,0.45), 0 6px 16px -4px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.05)' }}>
       <div>
-        <p className="font-sans text-[13px] tracking-[0.08em] text-mist mb-6">{step + 1} of {TOTAL_STEPS}</p>
-
         {step === 0 && (
           <div>
-            <h1 className="font-display font-light text-[30px] leading-snug text-ivory mb-3">What should I call you?</h1>
-            <p className="text-mist text-[14px] mb-10">A few quick things, then I'll get out of your way.</p>
+            <h1 className="font-display font-light text-[30px] leading-snug text-ivory mb-10">What should I call you?</h1>
             <input
               value={preferredName}
               onChange={e => setPreferredName(e.target.value)}
-              placeholder="Optional"
               className="w-full bg-transparent text-[17px] text-ivory placeholder:text-mist/60 outline-none pb-3"
               style={{ borderBottom: '1px solid rgba(37,56,58,0.14)' }}
             />
@@ -210,7 +206,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           <Button variant="ghost" onClick={() => setStep((s => (s - 1) as Step)(step))}>Back</Button>
         ) : <span />}
         {step < 3 ? (
-          <Button onClick={() => setStep((s => (s + 1) as Step)(step))}>{step === 1 ? 'Save my sky' : 'Continue'}</Button>
+          <Button onClick={() => setStep((s => (s + 1) as Step)(step))}>{step === 0 ? 'Next' : step === 1 ? 'Save my sky' : 'Continue'}</Button>
         ) : (
           <Button onClick={finish}>Start</Button>
         )}

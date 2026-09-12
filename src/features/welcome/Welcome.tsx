@@ -17,7 +17,7 @@ export function Welcome({ onComplete }: WelcomeProps) {
           edge, not just fill opacity, so the card reads clearly against any
           part of the photo (including bright snow/sky), not just darker areas. */}
       <div
-        className="relative z-10 w-full max-w-sm rounded-[28px] px-10 py-14 text-center"
+        className="relative z-10 w-full max-w-sm rounded-[36px] px-10 py-14 text-center"
         style={{
           background: 'rgba(255,255,255,0.88)',
           boxShadow: '0 26px 60px -12px rgba(0,0,0,0.45), 0 6px 16px -4px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.05)'
