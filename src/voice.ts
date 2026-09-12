@@ -34,36 +34,60 @@ export function unlockAudio(): void {
 
 let currentRequestId = 0;
 
-/** Fetches speech for `text` from /api/speak, plays it, resolves when playback ends. */
-async function speakText(text: string, onDebug?: (msg: string) => void): Promise<void> {
-  const requestId = ++currentRequestId;
-  onDebug?.('Requesting speech from /api/speak…');
-  const res = await fetch(`/api/speak?text=${encodeURIComponent(text)}`);
+function splitIntoSentences(text: string): string[] {
+  const matches = text.match(/[^.!?]+[.!?]+(\s+|$)/g);
+  if (!matches || matches.length === 0) return [text];
+  return matches.map(s => s.trim()).filter(Boolean);
+}
+
+async function fetchSpeechBlob(sentence: string): Promise<Blob> {
+  const res = await fetch(`/api/speak?text=${encodeURIComponent(sentence)}`);
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`TTS fetch failed: HTTP ${res.status} — ${body.slice(0, 200)}`);
   }
   const blob = await res.blob();
-  onDebug?.(`Received ${blob.size} bytes (${blob.type || 'no content-type'})`);
   if (blob.size === 0) throw new Error('TTS response was empty (0 bytes)');
-  const url = URL.createObjectURL(blob);
+  return blob;
+}
 
-  if (requestId !== currentRequestId) return; // superseded while fetching
+/** Splits `text` into sentences and fetches speech for ALL of them in
+ *  parallel immediately — this is what actually cuts time-to-first-audio.
+ *  Previously the entire reply was sent as one TTS request, so a
+ *  multi-sentence reply couldn't start playing until the whole thing had
+ *  been converted to speech. Now the first (usually short) sentence starts
+ *  playing as soon as it's ready, while the rest are already generating in
+ *  the background — by the time sentence 1 finishes playing, sentence 2 is
+ *  very likely already done fetching. Plays strictly in order regardless
+ *  of which fetch resolves first. */
+async function speakText(text: string, onDebug?: (msg: string) => void): Promise<void> {
+  const requestId = ++currentRequestId;
+  const sentences = splitIntoSentences(text);
+  onDebug?.(`Requesting speech for ${sentences.length} sentence(s) in parallel…`);
 
-  const audio = getSharedAudio();
-  onDebug?.(`Audio element before play: muted=${audio.muted}, volume=${audio.volume}`);
-  audio.src = url;
-  await new Promise<void>((resolve, reject) => {
-    audio.onended = () => {
-      onDebug?.('Playback ended normally');
-      resolve();
-    };
-    audio.onerror = () => reject(new Error(`Audio playback failed: ${audio.error?.message ?? 'unknown'}`));
-    audio
-      .play()
-      .then(() => onDebug?.('play() resolved — should be audible now'))
-      .catch(reject);
-  });
+  const blobPromises = sentences.map(s =>
+    fetchSpeechBlob(s).catch(err => {
+      onDebug?.(`Segment fetch failed, skipping: ${err.message}`);
+      return null;
+    })
+  );
+
+  for (let i = 0; i < sentences.length; i++) {
+    if (requestId !== currentRequestId) return; // superseded by a newer response — stop advancing
+    const blob = await blobPromises[i];
+    if (requestId !== currentRequestId) return;
+    if (!blob) continue; // one segment failing shouldn't silence the rest of the reply
+
+    onDebug?.(`Segment ${i + 1}/${sentences.length}: ${blob.size} bytes`);
+    const url = URL.createObjectURL(blob);
+    const audio = getSharedAudio();
+    audio.src = url;
+    await new Promise<void>((resolve, reject) => {
+      audio.onended = () => resolve();
+      audio.onerror = () => reject(new Error(`Audio playback failed: ${audio.error?.message ?? 'unknown'}`));
+      audio.play().then(() => onDebug?.(`Segment ${i + 1} playing`)).catch(reject);
+    });
+  }
 }
 
 // ---------- Voice activity detection ----------
