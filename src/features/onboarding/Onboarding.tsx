@@ -1,8 +1,7 @@
 import { tapHaptic } from '@/lib/haptics'
 import { useState } from 'react'
 import type { UserProfile } from '@/types'
-import { HELPS_OPTIONS, TRIGGER_OPTIONS, UNHELPFUL_OPTIONS } from '@/lib/constants'
-import { TextToggle } from '@/components/ui/TextToggle'
+import { HELPS_OPTIONS, TRIGGER_OPTIONS } from '@/lib/constants'
 import { Button } from '@/components/ui/Button'
 
 interface OnboardingProps {
@@ -121,23 +120,22 @@ function ConstellationField({
   )
 }
 
-// Four steps: name, triggers (constellation), helps (constellation), what
-// doesn't help. Support style was removed entirely — confirmed it's
-// actively used in the system prompt (unlike proactive check-ins, which
-// was truly inert), but 'blend' already matches the app's own stated
-// default philosophy ("brief validation, then fast action"), so everyone
-// now simply gets that baseline instead of being asked to choose before
-// their first conversation. Proactive check-ins was removed earlier for
-// the same reason as before (confirmed unused anywhere in the app).
-const TOTAL_STEPS = 4
-type Step = 0 | 1 | 2 | 3
+// Three steps: name, triggers (constellation), helps (constellation).
+// 'What doesn't help' was removed — confirmed it's actually used in the
+// system prompt context (unlike proactive check-ins, which was inert), but
+// the same information is already captured organically as an
+// ineffective_strategy memory the moment someone rejects a suggestion
+// mid-conversation, which is richer and more specific than a pre-chosen
+// word from a list. whatDoesntHelp now starts as an empty array and fills
+// in naturally through actual conversation instead of a dedicated screen.
+const TOTAL_STEPS = 3
+type Step = 0 | 1 | 2
 
 export function Onboarding({ onComplete }: OnboardingProps) {
   const [step, setStep] = useState<Step>(0)
   const [preferredName, setPreferredName] = useState('')
   const [triggers, setTriggers] = useState<string[]>([])
   const [helps, setHelps] = useState<string[]>([])
-  const [unhelpful, setUnhelpful] = useState<string[]>([])
 
   const toggle = (list: string[], setList: (v: string[]) => void, value: string) => {
     setList(list.includes(value) ? list.filter(v => v !== value) : [...list, value])
@@ -150,7 +148,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       supportStyle: 'blend',
       triggers,
       whatHelps: helps,
-      whatDoesntHelp: unhelpful,
+      whatDoesntHelp: [],
       proactiveCheckIns: false,
       onboardedAt: new Date().toISOString(),
       onboardingCompleted: true
@@ -208,24 +206,14 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           </div>
         )}
 
-        {step === 3 && (
-          <div>
-            <h1 className="font-display font-light text-[30px] leading-snug text-ivory mb-10">Anything that never helps?</h1>
-            <div className="flex flex-wrap gap-x-7 gap-y-5">
-              {UNHELPFUL_OPTIONS.map(u => (
-                <TextToggle key={u} label={u} selected={unhelpful.includes(u)} onClick={() => toggle(unhelpful, setUnhelpful, u)} />
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="flex justify-between items-center mt-10">
         {step > 0 ? (
           <Button variant="ghost" onClick={() => setStep((s => (s - 1) as Step)(step))}>Back</Button>
         ) : <span />}
-        {step < 3 ? (
-          <Button onClick={() => setStep((s => (s + 1) as Step)(step))}>{step === 0 ? 'Next' : step === 1 ? 'Save my sky' : 'Next'}</Button>
+        {step < 2 ? (
+          <Button onClick={() => setStep((s => (s + 1) as Step)(step))}>{step === 0 ? 'Next' : 'Save my sky'}</Button>
         ) : (
           <Button onClick={finish}>Start</Button>
         )}
