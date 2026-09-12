@@ -2,37 +2,96 @@ interface WelcomeProps {
   onComplete: () => void
 }
 
+// Four character portrait slots — PLACEHOLDER FRAMEWORK ONLY. Real character
+// art gets supplied separately and dropped in here; each slot just needs its
+// `image` path set once assets exist (e.g. '/images/characters/astronaut.jpg').
+// Until then, each renders as a clearly labeled placeholder frame in the
+// exact position/size the real art will occupy — swap `image: undefined` for
+// a real path and the placeholder disappears automatically.
+const CHARACTER_SLOTS: { label: string; image?: string }[] = [
+  { label: 'Astronaut' },
+  { label: 'Olympic Runner' },
+  { label: 'Action Hero' },
+  { label: 'Arctic Survivalist' }
+]
+
+function CharacterFrame({ label, image }: { label: string; image?: string }) {
+  return (
+    <div
+      className="relative aspect-[4/5] rounded-2xl overflow-hidden"
+      style={{
+        border: '2px solid rgba(180,150,90,0.5)',
+        boxShadow: '0 0 0 1px rgba(0,0,0,0.4), 0 12px 30px -8px rgba(0,0,0,0.6), inset 0 0 20px rgba(0,0,0,0.4)'
+      }}
+    >
+      {image ? (
+        <img src={image} alt={label} className="w-full h-full object-cover" />
+      ) : (
+        <div
+          className="w-full h-full flex items-center justify-center text-center px-2"
+          style={{ background: 'linear-gradient(160deg, #1A2028, #0D1116)' }}
+        >
+          <p className="font-sans text-[11px] tracking-[0.06em] text-[#C9A876]/70">{label}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Welcome({ onComplete }: WelcomeProps) {
   return (
-    <div className="relative min-h-dvh flex flex-col items-center justify-center px-8 overflow-hidden">
-      {/* Nature photo background */}
+    <div
+      className="relative min-h-dvh flex flex-col items-center justify-center px-6 py-10 overflow-hidden"
+      style={{
+        background: 'radial-gradient(circle at 50% 30%, #1C222B, #0A0D12 75%)'
+      }}
+    >
+      {/* Faint circuit-line texture — purely atmospheric */}
       <div
-        className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: "url('/images/welcome-mountains.jpg')" }}
-      />
-      {/* Muted color wash — softens the photo's raw saturation and keeps it inside the app's own aqua palette, rather than a vivid, high-contrast travel photo look */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[#E9F5F3]/25 via-[#DCEFEC]/18 to-[#CFEAE5]/32" />
-
-      {/* Frosted glass card — contrast comes from a strong shadow and a hairline
-          edge, not just fill opacity, so the card reads clearly against any
-          part of the photo (including bright snow/sky), not just darker areas. */}
-      <div
-        className="relative z-10 w-full max-w-sm rounded-[36px] px-10 py-14 text-center"
+        className="absolute inset-0 opacity-20"
         style={{
-          background: 'rgba(255,255,255,0.88)',
-          boxShadow: '0 26px 60px -12px rgba(0,0,0,0.45), 0 6px 16px -4px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.05)'
+          backgroundImage:
+            'linear-gradient(rgba(180,150,90,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(180,150,90,0.15) 1px, transparent 1px)',
+          backgroundSize: '38px 38px'
         }}
-      >
-        <p className="font-display font-light text-[30px] leading-snug text-ivory mb-4">Welcome to MindTip</p>
-        <p className="font-sans text-[15px] text-mist leading-relaxed mb-12">
-          A quiet place to see what's going on and what to do next.
+      />
+
+      <div className="relative z-10 w-full max-w-sm">
+        {/* Four character frames, MindTip title overlapping the center */}
+        <div className="relative grid grid-cols-2 gap-3 mb-2">
+          {CHARACTER_SLOTS.map(slot => (
+            <CharacterFrame key={slot.label} label={slot.label} image={slot.image} />
+          ))}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <p
+              className="font-sans font-black text-[15px] tracking-[0.15em] text-center leading-tight px-4 py-3 rounded-xl"
+              style={{
+                color: '#EFE6D0',
+                background: 'rgba(10,13,18,0.85)',
+                border: '1px solid rgba(180,150,90,0.4)',
+                textShadow: '0 0 12px rgba(180,150,90,0.5)'
+              }}
+            >
+              WELCOME TO<br />
+              <span className="text-[22px]">MINDTIP</span>
+            </p>
+          </div>
+        </div>
+
+        <p className="font-sans text-[14px] text-[#D8D2C4]/85 leading-relaxed text-center mt-6 mb-8">
+          Explore life's challenges through the eyes of someone different — choose a character, step into their world, and see what they might say.
         </p>
 
         <button
           onClick={onComplete}
-          className="w-full bg-gradient-to-r from-[#5B7FA6]/85 to-[#3E5E82]/85 text-white font-sans text-[15px] font-medium py-4 rounded-full shadow-[0_10px_30px_-8px_rgba(62,94,130,0.55)] hover:shadow-[0_14px_36px_-8px_rgba(62,94,130,0.65)] hover:-translate-y-0.5 transition-all duration-300"
+          className="w-full font-sans text-[15px] font-semibold tracking-[0.04em] py-4 rounded-full transition-all duration-300 hover:-translate-y-0.5"
+          style={{
+            color: '#1A1409',
+            background: 'linear-gradient(180deg, #E8CC8F, #B4954A)',
+            boxShadow: '0 10px 24px -6px rgba(180,150,90,0.5), inset 0 1px 0 rgba(255,255,255,0.4)'
+          }}
         >
-          Begin
+          Next
         </button>
       </div>
     </div>
