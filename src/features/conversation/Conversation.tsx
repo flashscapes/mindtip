@@ -61,7 +61,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
   // on — a plain, always-visible action from here on, not a one-time,
   // timed invitation. Recomputed from current message count on every
   // render, so no separate state or one-time gating is needed.
-  const canReflect = messages.filter(m => m.role === 'user').length >= 2
+  const canReflect = messages.filter(m => m.role === 'user').length >= 4
 
   // Persist the in-progress conversation every time it changes, so a full
   // page reload (a hard refresh, or iOS backgrounding/reloading the PWA
@@ -153,7 +153,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     // action remains available the whole time regardless, so missing or
     // ignoring this moment costs nothing.
     const userMessageCount = messagesRef.current.filter(m => m.role === 'user').length
-    const justCrossedSuggestionThreshold = userMessageCount === 4
+    const justCrossedSuggestionThreshold = userMessageCount === 8
     setJustSuggested(justCrossedSuggestionThreshold)
 
     setMessagesAndRef(prev => [
