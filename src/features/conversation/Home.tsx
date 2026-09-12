@@ -26,29 +26,47 @@ const INTENTIONS = [
     key: 'calm',
     label: 'Calm',
     seed: "I want to find a little calm today.",
-    colors: ['#8FE0D0', '#4FAE9E']
+    colors: ['#8FE0D0', '#4FAE9E'],
+    planetColor: '#CFE0F5',
+    // top / right / bottom / left around the orb
+    x: 150, y: 50, labelDy: -18
   },
   {
     key: 'focus',
     label: 'Focus',
     seed: "I'm having trouble focusing and want some clarity.",
-    colors: ['#9AC4CC', '#3D7A85']
+    colors: ['#9AC4CC', '#3D7A85'],
+    planetColor: '#E0CFF5',
+    x: 250, y: 150, labelDy: 4
   },
   {
     key: 'balance',
     label: 'Balance',
     seed: "I've been feeling pulled in a lot of directions and want some balance.",
-    colors: ['#E3CFA0', '#B8935A']
+    colors: ['#E3CFA0', '#B8935A'],
+    planetColor: '#F5E0CF',
+    x: 150, y: 250, labelDy: 22
   },
   {
     key: 'energy',
     label: 'Energy',
     seed: "I want to explore what's giving me energy, or taking it, right now.",
-    colors: ['#E3EDA0', '#9BCB74']
+    colors: ['#E3EDA0', '#9BCB74'],
+    planetColor: '#CFF5E0',
+    x: 50, y: 150, labelDy: 4
   }
 ] as const
 
-const DEFAULT_ORB_COLORS: readonly [string, string] = ['#9AD9CC', '#4FAE9E']
+const DEFAULT_ORB_COLORS: readonly [string, string] = ['#A79AE0', '#4A4080']
+const ORB_X = 150
+const ORB_Y = 150
+
+function greeting(): string {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'Good morning'
+  if (hour < 17) return 'Good afternoon'
+  return 'Good evening'
+}
 
 // --- Today's Experiment: caching + suppression -----------------------------
 // No scheduler, no background job — purely reactive, evaluated once per
@@ -156,69 +174,101 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
   }
 
   return (
-    <div className="relative min-h-dvh flex flex-col px-8 py-14 overflow-hidden bg-gradient-to-br from-[#E9F5F3] via-[#DCEFEC] to-[#CFEAE5]">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-24 -left-20 w-80 h-80 rounded-full bg-[#7FCFC0] opacity-30 blur-3xl" />
-        <div className="absolute top-1/3 -right-24 w-96 h-96 rounded-full bg-[#B8935A] opacity-20 blur-3xl" />
-        <div className="absolute -bottom-32 left-1/4 w-96 h-96 rounded-full bg-[#4FAE9E] opacity-25 blur-3xl" />
-      </div>
-
-      <p className="relative z-10 font-sans text-[13px] tracking-[0.08em] text-mist">MindTip</p>
+    <div
+      className="relative min-h-dvh flex flex-col px-8 py-14 overflow-hidden"
+      style={{
+        background: [
+          'radial-gradient(circle at 75% 15%, rgba(150,220,190,0.35), transparent 45%)',
+          'radial-gradient(circle at 20% 85%, rgba(120,150,230,0.3), transparent 50%)',
+          'linear-gradient(135deg, #3F5C9E 0%, #6455A8 30%, #8A4F9C 55%, #4F9C82 100%)'
+        ].join(', ')
+      }}
+    >
+      <p className="relative z-10 font-sans text-[13px] tracking-[0.08em] text-white/80">MindTip</p>
 
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center w-full max-w-sm mx-auto">
-        <h1 className="font-display font-light text-[26px] leading-snug text-ivory text-center mb-10">
-          What shall we explore today{name}?
+        <h1
+          className="font-display font-light text-[22px] leading-snug text-white text-center mb-6"
+          style={{ textShadow: '0 2px 12px rgba(0,0,0,0.15)' }}
+        >
+          {greeting()}{name} — how are you feeling?
         </h1>
 
-        <div className="relative w-40 h-40 mb-10">
-          {/* Mist halo — orbits slowly around the orb, colored to match the
-              currently selected intention (reuses orbFrom/orbTo directly,
-              so it updates automatically with no separate logic). */}
-          <div className="absolute inset-0 mindtip-mist-spin">
-            <div className="absolute rounded-full" style={{ width: 44, height: 44, top: -6, left: '50%', marginLeft: -22, background: orbFrom, opacity: 0.35, filter: 'blur(18px)' }} />
-            <div className="absolute rounded-full" style={{ width: 40, height: 40, bottom: 4, left: 8, background: orbTo, opacity: 0.3, filter: 'blur(18px)' }} />
-            <div className="absolute rounded-full" style={{ width: 40, height: 40, bottom: 0, right: 4, background: orbFrom, opacity: 0.3, filter: 'blur(18px)' }} />
-          </div>
+        {/* Orb + four intentions orbiting it, in place of a grid of buttons.
+            Same underlying selection state as before (setSelected/onStart) —
+            only the presentation changed. */}
+        <svg viewBox="0 0 300 300" className="w-full max-w-[280px] mb-4">
+          {/* Slow-rotating orbit path — purely decorative */}
+          <circle
+            cx={ORB_X} cy={ORB_Y} r="100" fill="none" stroke="#FFFFFF" strokeWidth="1"
+            opacity="0.18" strokeDasharray="2 6" className="mindtip-home-ring-spin"
+            style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+          />
 
-          {/* The orb itself — heartbeat pulse (unchanged), plus layered
-              inset shadows for real dimensionality instead of a flat fill. */}
-          <div
-            className="mindtip-orb absolute top-1/2 left-1/2 -mt-16 -ml-16 w-32 h-32 rounded-full overflow-hidden transition-all duration-700"
-            style={{
-              background: `radial-gradient(circle at 35% 30%, ${orbFrom}, ${orbTo})`,
-              boxShadow: '0 20px 50px -15px rgba(37,56,58,0.35), inset -10px -12px 22px rgba(0,0,0,0.18), inset 8px 10px 18px rgba(255,255,255,0.22)'
-            }}
-          >
-            {/* Slowly rotating inner highlight — off-center, so rotating it
-                visibly circulates within the sphere, suggesting something
-                alive moving inside rather than a static fill. */}
-            <div
-              className="absolute inset-0 mindtip-orb-swirl"
-              style={{ background: 'radial-gradient(circle at 30% 25%, rgba(255,255,255,0.45), transparent 60%)' }}
+          {/* Connecting line from the selected planet to the orb — same
+              visual language as the constellation screens' star-to-orb lines */}
+          {activeIntention && (
+            <line
+              x1={activeIntention.x} y1={activeIntention.y} x2={ORB_X} y2={ORB_Y}
+              stroke={activeIntention.planetColor} strokeWidth="1.8" opacity="0.85"
             />
-          </div>
-        </div>
+          )}
 
-        <div className="grid grid-cols-2 gap-3 w-full mb-6">
-          {INTENTIONS.map(intention => (
-            <button
+          {INTENTIONS.map((intention, i) => (
+            <g
               key={intention.key}
               onClick={() => setSelected(intention.key)}
-              className={`rounded-2xl py-6 text-center border transition-all duration-300 ${
-                selected === intention.key
-                  ? 'bg-white/60 border-bronze shadow-md'
-                  : 'bg-white/35 border-white/50 hover:bg-white/45'
-              }`}
+              style={{
+                cursor: 'pointer',
+                transformBox: 'fill-box',
+                transformOrigin: 'center',
+                animation: 'mindtip-planet-in 1.1s cubic-bezier(0.34,1.56,0.64,1) forwards',
+                animationDelay: `${i * 0.22}s`,
+                opacity: 0
+              }}
             >
-              <span className="font-sans text-[15px] text-ivory">{intention.label}</span>
-            </button>
+              <circle cx={intention.x} cy={intention.y} r="24" fill="transparent" />
+              <circle
+                cx={intention.x} cy={intention.y}
+                r={selected === intention.key ? 11 : 9}
+                fill={intention.planetColor}
+                opacity={selected === intention.key ? 1 : 0.9}
+                style={{ transition: 'r 0.3s cubic-bezier(0.34,1.56,0.64,1)' }}
+              />
+              <text x={intention.x} y={intention.y + intention.labelDy} textAnchor="middle" fontSize="13" fill="#F5F5FA">
+                {intention.label}
+              </text>
+            </g>
           ))}
-        </div>
+
+          {/* Soft, continuous, transparent gas aura — no moving parts */}
+          <circle cx={ORB_X} cy={ORB_Y} r="50" fill="url(#homeAura)" />
+
+          {/* The living orb — gentle continuous breathing, color shifts to
+              match the selected intention (orbFrom/orbTo, unchanged logic) */}
+          <g className="mindtip-home-orb-breathe" style={{ transformBox: 'fill-box', transformOrigin: 'center' }}>
+            <circle cx={ORB_X} cy={ORB_Y} r="30" fill="url(#homeOrbGradient)" />
+            <ellipse cx={ORB_X - 10} cy={ORB_Y - 12} rx="7" ry="5" fill="#FFFFFF" opacity="0.65" />
+          </g>
+
+          <defs>
+            <radialGradient id="homeOrbGradient" cx="35%" cy="30%" r="75%">
+              <stop offset="0%" stopColor="#EDE7FA" />
+              <stop offset="45%" stopColor={orbFrom} />
+              <stop offset="100%" stopColor={orbTo} />
+            </radialGradient>
+            <radialGradient id="homeAura" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor={orbFrom} stopOpacity="0.4" />
+              <stop offset="60%" stopColor={orbFrom} stopOpacity="0.14" />
+              <stop offset="100%" stopColor={orbFrom} stopOpacity="0" />
+            </radialGradient>
+          </defs>
+        </svg>
 
         <button
           onClick={handleExplore}
           disabled={!activeIntention}
-          className="w-full bg-gradient-to-r from-[#B8935A] to-[#A5804B] text-white font-sans text-[15px] font-medium py-4 rounded-full shadow-[0_10px_30px_-8px_rgba(184,147,90,0.6)] disabled:opacity-40 disabled:shadow-none transition-all duration-300 mb-8"
+          className="w-full bg-white/90 text-[#3F5C9E] font-sans text-[15px] font-medium py-4 rounded-full shadow-[0_10px_30px_-8px_rgba(0,0,0,0.3)] disabled:opacity-40 disabled:shadow-none transition-all duration-300 mb-8"
         >
           Explore
         </button>
@@ -234,16 +284,16 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
             value={text}
             onChange={e => setText(e.target.value)}
             placeholder="Or tell me what's on your mind…"
-            className="w-full bg-transparent text-[15px] text-ivory placeholder:text-mist/70 outline-none pb-3 text-center focus:border-bronze transition-colors duration-300"
-            style={{ borderBottom: '1px solid rgba(37,56,58,0.14)' }}
+            className="w-full bg-transparent text-[15px] text-white placeholder:text-white/60 outline-none pb-3 text-center focus:border-white/60 transition-colors duration-300"
+            style={{ borderBottom: '1px solid rgba(255,255,255,0.3)' }}
           />
         </form>
 
         {experiment && (
           <button onClick={handleExploreExperiment} className="w-full text-left mt-8">
-            <p className="font-sans text-[10px] tracking-[0.08em] text-bronze mb-2">✦ TODAY'S EXPERIMENT</p>
-            <p className="font-display text-[14px] text-ivory leading-[1.7] mb-3">{experiment}</p>
-            <p className="font-sans text-[12px] text-bronze">Explore this →</p>
+            <p className="font-sans text-[10px] tracking-[0.08em] text-white/90 mb-2">✦ TODAY'S EXPERIMENT</p>
+            <p className="font-display text-[14px] text-white leading-[1.7] mb-3">{experiment}</p>
+            <p className="font-sans text-[12px] text-white/80">Explore this →</p>
           </button>
         )}
       </div>

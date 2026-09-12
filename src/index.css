@@ -52,3 +52,24 @@ body {
 .mindtip-inner-orb-breathe {
   animation: mindtip-inner-orb-breathe 3s ease-in-out infinite;
 }
+
+@keyframes mindtip-home-ring-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.mindtip-home-ring-spin {
+  animation: mindtip-home-ring-spin 40s linear infinite;
+}
+
+@keyframes mindtip-home-orb-breathe {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.18); filter: brightness(1.35); }
+}
+.mindtip-home-orb-breathe {
+  animation: mindtip-home-orb-breathe 3.2s ease-in-out infinite;
+}
+
+@keyframes mindtip-planet-in {
+  0% { opacity: 0; transform: scale(0.35); }
+  100% { opacity: 1; transform: scale(1); }
+}
