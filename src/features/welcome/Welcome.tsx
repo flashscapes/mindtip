@@ -30,7 +30,7 @@ export function Welcome({ onComplete }: WelcomeProps) {
 
         <button
           onClick={onComplete}
-          className="w-full bg-gradient-to-r from-[#5C8A7A] to-[#3F6B5C] text-white font-sans text-[15px] font-medium py-4 rounded-full shadow-[0_10px_30px_-8px_rgba(63,107,92,0.6)] hover:shadow-[0_14px_36px_-8px_rgba(63,107,92,0.7)] hover:-translate-y-0.5 transition-all duration-300"
+          className="w-full bg-gradient-to-r from-[#5B7FA6]/85 to-[#3E5E82]/85 text-white font-sans text-[15px] font-medium py-4 rounded-full shadow-[0_10px_30px_-8px_rgba(62,94,130,0.55)] hover:shadow-[0_14px_36px_-8px_rgba(62,94,130,0.65)] hover:-translate-y-0.5 transition-all duration-300"
         >
           Begin
         </button>

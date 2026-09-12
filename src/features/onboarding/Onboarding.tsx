@@ -45,7 +45,9 @@ function ConstellationField({
   onToggle: (value: string) => void
 }) {
   const [pulseKey, setPulseKey] = useState(0)
-  const color = '#F0DDA0'
+  // One muted, distinct color per fixed star position — soft and
+  // desaturated so the sky still reads as calm rather than a rainbow.
+  const STAR_COLORS = ['#D9BE8F', '#D9A6A0', '#B7A6D0', '#A6B7D9', '#8FC4BB', '#A8C49A']
 
   return (
     <svg
@@ -56,7 +58,7 @@ function ConstellationField({
       {options.map((opt, i) => {
         const p = STAR_POSITIONS[i]
         if (!p || !selected.includes(opt)) return null
-        return <line key={`line-${opt}`} x1={p.x} y1={p.y} x2={ORB_X} y2={ORB_Y} stroke={color} strokeWidth="1.8" opacity="0.95" />
+        return <line key={`line-${opt}`} x1={p.x} y1={p.y} x2={ORB_X} y2={ORB_Y} stroke={STAR_COLORS[i]} strokeWidth="1.8" opacity="0.95" />
       })}
 
       {/* Outer warm halo + teal/lavender bloom — bleeds gently into the dark field */}
@@ -64,8 +66,8 @@ function ConstellationField({
       <circle cx={ORB_X} cy={ORB_Y} r="52" fill="#7FCFC0" opacity="0.14" />
       <circle cx={ORB_X} cy={ORB_Y} r="38" fill="#B7A6E0" opacity="0.16" />
 
-      {/* The living orb — gentle continuous breathing, brief intensify pulse on any selection (key remount replays the pulse animation) */}
-      <g key={pulseKey} className="mindtip-inner-orb-breathe" style={{ transformOrigin: `${ORB_X}px ${ORB_Y}px` }}>
+      {/* The living orb — gentle continuous breathing, brief intensify pulse on any selection (key remount replays the pulse animation). transformBox: fill-box makes the scale reliably center on the orb itself across browsers, rather than depending on manually-matched pixel coordinates. */}
+      <g key={pulseKey} className="mindtip-inner-orb-breathe" style={{ transformBox: 'fill-box', transformOrigin: 'center' }}>
         <defs>
           <radialGradient id="orbCore" cx="38%" cy="32%" r="75%">
             <stop offset="0%" stopColor="#CFEFE6" />
@@ -82,6 +84,7 @@ function ConstellationField({
         const p = STAR_POSITIONS[i]
         if (!p) return null
         const isSelected = selected.includes(opt)
+        const color = STAR_COLORS[i]
         return (
           <g
             key={opt}
@@ -172,7 +175,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               value={preferredName}
               onChange={e => setPreferredName(e.target.value)}
               className="w-full bg-transparent text-[17px] text-ivory placeholder:text-mist/60 outline-none pb-3"
-              style={{ borderBottom: '1px solid rgba(37,56,58,0.14)' }}
+              style={{ borderBottom: '1px solid rgba(37,56,58,0.28)' }}
             />
           </div>
         )}
