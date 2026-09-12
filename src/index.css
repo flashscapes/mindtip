@@ -47,8 +47,8 @@ body {
 
 @keyframes mindtip-inner-orb-breathe {
   0%, 100% { transform: scale(1); filter: brightness(1); }
-  50% { transform: scale(1.04); filter: brightness(1.12); }
+  50% { transform: scale(1.12); filter: brightness(1.3); }
 }
 .mindtip-inner-orb-breathe {
-  animation: mindtip-inner-orb-breathe 5s ease-in-out infinite;
+  animation: mindtip-inner-orb-breathe 3.5s ease-in-out infinite;
 }
