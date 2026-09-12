@@ -191,7 +191,7 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
           className="font-display font-light text-[22px] leading-snug text-white text-center mb-6"
           style={{ textShadow: '0 2px 12px rgba(0,0,0,0.15)' }}
         >
-          {greeting()}{name} — how are you feeling?
+          {greeting()}{name} — what are we looking into today?
         </h1>
 
         {/* Orb + four intentions orbiting it, in place of a grid of buttons.
