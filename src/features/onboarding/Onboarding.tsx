@@ -38,21 +38,20 @@ const ORB_Y = 140
 function ConstellationField({
   options,
   selected,
-  onToggle,
-  color,
-  orbColor
+  onToggle
 }: {
   options: readonly string[]
   selected: string[]
   onToggle: (value: string) => void
-  color: string
-  orbColor: string
 }) {
+  const [pulseKey, setPulseKey] = useState(0)
+  const color = '#F0DDA0'
+
   return (
     <svg
       viewBox="0 0 300 280"
       className="w-full rounded-2xl"
-      style={{ background: `radial-gradient(circle at 50% 45%, ${orbColor}33, #060F10)` }}
+      style={{ background: 'radial-gradient(circle at 50% 45%, #16242E, #060B10)' }}
     >
       {options.map((opt, i) => {
         const p = STAR_POSITIONS[i]
@@ -60,16 +59,37 @@ function ConstellationField({
         return <line key={`line-${opt}`} x1={p.x} y1={p.y} x2={ORB_X} y2={ORB_Y} stroke={color} strokeWidth="1.8" opacity="0.95" />
       })}
 
-      <circle cx={ORB_X} cy={ORB_Y} r="13" fill={orbColor} />
-      <circle cx={ORB_X} cy={ORB_Y} r="13" fill="none" stroke={color} strokeWidth="2" opacity="0.75" />
+      {/* Outer warm halo + teal/lavender bloom — bleeds gently into the dark field */}
+      <circle cx={ORB_X} cy={ORB_Y} r="70" fill="#E8B98C" opacity="0.10" />
+      <circle cx={ORB_X} cy={ORB_Y} r="52" fill="#7FCFC0" opacity="0.14" />
+      <circle cx={ORB_X} cy={ORB_Y} r="38" fill="#B7A6E0" opacity="0.16" />
+
+      {/* The living orb — gentle continuous breathing, brief intensify pulse on any selection (key remount replays the pulse animation) */}
+      <g key={pulseKey} className="mindtip-inner-orb-breathe" style={{ transformOrigin: `${ORB_X}px ${ORB_Y}px` }}>
+        <defs>
+          <radialGradient id="orbCore" cx="38%" cy="32%" r="75%">
+            <stop offset="0%" stopColor="#CFEFE6" />
+            <stop offset="45%" stopColor="#7FCFC0" />
+            <stop offset="80%" stopColor="#A8A0D8" />
+            <stop offset="100%" stopColor="#8B85B8" />
+          </radialGradient>
+        </defs>
+        <circle cx={ORB_X} cy={ORB_Y} r="30" fill="url(#orbCore)" />
+        <ellipse cx={ORB_X - 10} cy={ORB_Y - 12} rx="10" ry="7" fill="#FFFFFF" opacity="0.45" />
+      </g>
 
       {options.map((opt, i) => {
         const p = STAR_POSITIONS[i]
         if (!p) return null
         const isSelected = selected.includes(opt)
         return (
-          <g key={opt} onClick={() => { tapHaptic(); onToggle(opt) }} style={{ cursor: 'pointer' }}>
+          <g
+            key={opt}
+            onClick={() => { tapHaptic(); setPulseKey(k => k + 1); onToggle(opt) }}
+            style={{ cursor: 'pointer' }}
+          >
             <circle cx={p.x} cy={p.y} r="22" fill="transparent" />
+            <circle cx={p.x} cy={p.y} r={isSelected ? 9 : 6} fill={color} opacity={isSelected ? 0.3 : 0.2} />
             <circle
               cx={p.x}
               cy={p.y}
@@ -139,7 +159,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     <div className="relative min-h-dvh flex flex-col items-center justify-center px-6 py-10 overflow-hidden">
       <div
         className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: "url('/images/welcome-mountains.jpg')" }}
+        style={{ backgroundImage: `url('/images/${step === 1 || step === 2 ? 'snowy-mountains' : 'welcome-mountains'}.jpg')` }}
       />
       <div className="absolute inset-0 bg-gradient-to-b from-[#E9F5F3]/25 via-[#DCEFEC]/18 to-[#CFEAE5]/32" />
 
@@ -166,8 +186,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 options={TRIGGER_OPTIONS}
                 selected={triggers}
                 onToggle={v => toggle(triggers, setTriggers, v)}
-                color="#D9BE8F"
-                orbColor="#4FAE9E"
               />
             </div>
           </div>
@@ -182,8 +200,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 options={HELPS_OPTIONS}
                 selected={helps}
                 onToggle={v => toggle(helps, setHelps, v)}
-                color="#7FCFC0"
-                orbColor="#B8935A"
               />
             </div>
           </div>
@@ -206,7 +222,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           <Button variant="ghost" onClick={() => setStep((s => (s - 1) as Step)(step))}>Back</Button>
         ) : <span />}
         {step < 3 ? (
-          <Button onClick={() => setStep((s => (s + 1) as Step)(step))}>{step === 0 ? 'Next' : step === 1 ? 'Save my sky' : 'Continue'}</Button>
+          <Button onClick={() => setStep((s => (s + 1) as Step)(step))}>{step === 0 ? 'Next' : step === 1 ? 'Save my sky' : 'Next'}</Button>
         ) : (
           <Button onClick={finish}>Start</Button>
         )}

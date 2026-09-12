@@ -44,3 +44,11 @@ body {
 .mindtip-orb-swirl {
   animation: mindtip-orb-swirl-spin 22s linear infinite;
 }
+
+@keyframes mindtip-inner-orb-breathe {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.04); filter: brightness(1.12); }
+}
+.mindtip-inner-orb-breathe {
+  animation: mindtip-inner-orb-breathe 5s ease-in-out infinite;
+}
