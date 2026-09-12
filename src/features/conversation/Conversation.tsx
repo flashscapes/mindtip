@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Message, UserProfile } from '@/types'
+import type { Character, Message, UserProfile } from '@/types'
 import { createAIProvider } from '@/services/ai'
 import { LocalMemoryService } from '@/services/memory/MemoryService'
 import { createMemoryExtractor } from '@/services/memory'
@@ -19,6 +19,11 @@ interface ConversationProps {
   // sent — used when the user arrives here via the Home mood check-in,
   // which already unlocked audio playback during its own tap.
   autoEnableVoice?: boolean
+  // Set once when a character was chosen on Home — included in every turn
+  // for the whole conversation, not just the first, so the persona voice
+  // stays consistent throughout. Undefined for conversations started via
+  // free text or continued from Reflection/Experiment.
+  character?: Character
   // Called when the person taps "Emerging Insights" (or accepts a spoken
   // suggestion by saying "yes"). Hands the full transcript up so a
   // Reflection can be generated from it.
@@ -26,7 +31,7 @@ interface ConversationProps {
   onExit: () => void
 }
 
-export function Conversation({ profile, initialMessage, seedMessages, autoEnableVoice, onReflectionReady, onExit }: ConversationProps) {
+export function Conversation({ profile, initialMessage, seedMessages, autoEnableVoice, character, onReflectionReady, onExit }: ConversationProps) {
   const ai = useMemo(() => createAIProvider(), [])
   const memory = useMemo(() => new LocalMemoryService(), [])
   const memoryExtractor = useMemo(() => createMemoryExtractor(), [])
@@ -126,6 +131,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     try {
       response = await ai.generateResponse({
         profile,
+        character,
         relevantMemories,
         recentMessages: messagesRef.current,
         currentMessage: trimmed

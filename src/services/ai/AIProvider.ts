@@ -1,4 +1,4 @@
-import type { Memory, Message, UserProfile, Tip } from '@/types'
+import type { Character, Memory, Message, UserProfile, Tip } from '@/types'
 
 /**
  * Everything the AI needs to generate a personalized response.
@@ -10,6 +10,8 @@ export interface AIContext {
   relevantMemories: Memory[]
   recentMessages: Message[]
   currentMessage: string
+  /** Set for the whole conversation once a character is chosen on Home — see buildContext.ts for how this gets woven into the prompt. */
+  character?: Character
 }
 
 export interface AIResponse {

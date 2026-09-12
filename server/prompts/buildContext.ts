@@ -13,9 +13,20 @@ const SUPPORT_STYLE_LABELS: Record<string, string> = {
  * changes, only the facts it's given about this particular user.
  */
 export function buildUserContextBlock(context: AIContext): string {
-  const { profile, relevantMemories, recentMessages } = context
+  const { profile, relevantMemories, recentMessages, character } = context
 
-  const lines = [
+  const lines: string[] = []
+
+  if (character) {
+    lines.push(
+      'CHARACTER PERSONA FOR THIS CONVERSATION',
+      `You are speaking as: ${character.label}`,
+      character.personaPrompt,
+      ''
+    )
+  }
+
+  lines.push(
     'USER PROFILE',
     `Preferred name: ${profile.preferredName ?? 'not given'}`,
     `Support style: ${SUPPORT_STYLE_LABELS[profile.supportStyle] ?? profile.supportStyle}`,
@@ -28,7 +39,7 @@ export function buildUserContextBlock(context: AIContext): string {
     '',
     "WHAT DOESN'T HELP",
     profile.whatDoesntHelp.length ? profile.whatDoesntHelp.join(', ') : 'none stated'
-  ]
+  )
 
   if (relevantMemories.length > 0) {
     lines.push('', 'RELEVANT MEMORIES')

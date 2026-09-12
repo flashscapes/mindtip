@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Message, UserProfile } from '@/types'
+import type { Character, Message, UserProfile } from '@/types'
 import { useUserProfile } from '@/features/profile/useUserProfile'
 import { Welcome } from '@/features/welcome/Welcome'
 import { Onboarding } from '@/features/onboarding/Onboarding'
@@ -45,16 +45,20 @@ export default function App() {
   // back up normally once the person taps to continue.
   const [autoVoiceStart, setAutoVoiceStart] = useState(false)
   const [reflectionMessages, setReflectionMessages] = useState<Message[]>([])
+  // Set once when a character is chosen on Home, persists for the whole
+  // conversation (every turn, not just the first) — see Conversation.tsx.
+  const [character, setCharacter] = useState<Character | undefined>()
 
   const handleOnboardingComplete = (newProfile: UserProfile) => {
     saveProfile(newProfile)
     setScreen('home')
   }
 
-  const handleStartConversation = (message: string, autoVoice = false) => {
+  const handleStartConversation = (message: string, autoVoice = false, chosenCharacter?: Character) => {
     setInitialMessage(message)
     setSeedMessages(undefined)
     setAutoVoiceStart(autoVoice)
+    setCharacter(chosenCharacter)
     setScreen('conversation')
   }
 
@@ -94,11 +98,13 @@ export default function App() {
         initialMessage={initialMessage}
         seedMessages={seedMessages}
         autoEnableVoice={autoVoiceStart}
+        character={character}
         onReflectionReady={handleReflectionReady}
         onExit={() => {
           setInitialMessage(undefined)
           setSeedMessages(undefined)
           setAutoVoiceStart(false)
+          setCharacter(undefined)
           sessionStorage.removeItem(STORAGE_KEYS.conversation)
           setScreen('home')
         }}

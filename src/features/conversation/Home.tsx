@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Message, UserProfile } from '@/types'
+import type { Character, Message, UserProfile } from '@/types'
 import { unlockAudio } from '@/voice'
 import { LocalMemoryService } from '@/services/memory/MemoryService'
 import { createExperimentGenerator } from '@/services/experiment'
@@ -8,49 +8,52 @@ import { STORAGE_KEYS } from '@/lib/constants'
 interface HomeProps {
   profile: UserProfile
   // `autoVoice` tells the caller to enable full hands-free voice for this
-  // conversation before the first response ever arrives.
-  onStart: (message: string, autoVoice?: boolean) => void
+  // conversation before the first response ever arrives. `character` (if
+  // chosen) persists for the whole conversation — see Conversation.tsx.
+  onStart: (message: string, autoVoice?: boolean, character?: Character) => void
   // Starts a conversation seeded with existing messages rather than a
   // single user-voiced line — reuses the exact same mechanism already
   // built for Reflection's "Continue talking".
   onExploreExperiment: (seedMessages: Message[]) => void
 }
 
-// Each intention becomes the opening line of the conversation, written as
-// something the person would actually say — not a canned line from MindTip.
-// The AI generates its own genuine first reply from this, informed by a
-// small, generic instruction in the system prompt: the intention is a
-// starting lens, not a script or a separate mode.
-const INTENTIONS = [
+// Each character becomes the voice for the whole conversation. The seed is
+// a neutral opener — the actual topic is whatever the person brings up
+// next — while personaPrompt does the real work of making the voice
+// genuinely distinct, not just a costume in name only.
+const CHARACTERS = [
   {
-    key: 'calm',
-    label: 'Calm',
-    seed: "I want to find a little calm today.",
-    colors: ['#8FE0D0', '#4FAE9E'],
+    key: 'astronaut',
+    label: 'Astronaut',
+    seed: "I want to talk something through.",
+    personaPrompt: "Speak like a veteran astronaut: calm under pressure, precise, thinks in terms of checklists, systems, and controlled risk. Draws naturally on the isolation and perspective of spaceflight — the vastness of space makes problems feel both small and worth taking seriously. Measured, unhurried, never dramatic.",
+    colors: ['#9AC4CC', '#3D7A85'],
     planetColor: '#CFE0F5',
-    // top / right / bottom / left around the orb
     x: 150, y: 50, labelDy: -18
   },
   {
-    key: 'focus',
-    label: 'Focus',
-    seed: "I'm having trouble focusing and want some clarity.",
-    colors: ['#9AC4CC', '#3D7A85'],
+    key: 'runner',
+    label: 'Olympic Runner',
+    seed: "I want to talk something through.",
+    personaPrompt: "Speak like an elite Olympic distance runner: disciplined, direct, thinks in terms of pacing, training cycles, and mental toughness built through repetition. Talks about setbacks as part of training, not failure. Warm but no-nonsense — respects effort, impatient with excuses, genuinely encouraging without empty cheerleading.",
+    colors: ['#E3CFA0', '#B8935A'],
     planetColor: '#E0CFF5',
     x: 250, y: 150, labelDy: 4
   },
   {
-    key: 'balance',
-    label: 'Balance',
-    seed: "I've been feeling pulled in a lot of directions and want some balance.",
-    colors: ['#E3CFA0', '#B8935A'],
+    key: 'action-hero',
+    label: 'Action Hero',
+    seed: "I want to talk something through.",
+    personaPrompt: "Speak like a seasoned leading action star: confident, a little wry, cuts straight to what matters. Thinks in terms of decisive action over endless deliberation, but isn't reckless — has genuine instinct for reading a situation. Occasionally dryly funny. Doesn't do lengthy speeches.",
+    colors: ['#8FE0D0', '#4FAE9E'],
     planetColor: '#F5E0CF',
     x: 150, y: 250, labelDy: 22
   },
   {
-    key: 'energy',
-    label: 'Energy',
-    seed: "I want to explore what's giving me energy, or taking it, right now.",
+    key: 'survivalist',
+    label: 'Arctic Survivalist',
+    seed: "I want to talk something through.",
+    personaPrompt: "Speak like a seasoned solo wilderness survivalist: plainspoken, resourceful, deeply comfortable with discomfort. Thinks in terms of what's actually within your control right now versus what isn't, conserving energy for what matters, and respecting hard truths rather than sugar-coating them. Quietly steady, not stoic to the point of coldness.",
     colors: ['#E3EDA0', '#9BCB74'],
     planetColor: '#CFF5E0',
     x: 50, y: 150, labelDy: 4
@@ -108,8 +111,8 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
   const [experiment, setExperiment] = useState<string | null>(null)
   const name = profile.preferredName ? `, ${profile.preferredName}` : ''
 
-  const activeIntention = INTENTIONS.find(i => i.key === selected)
-  const [orbFrom, orbTo] = activeIntention?.colors ?? DEFAULT_ORB_COLORS
+  const activeCharacter = CHARACTERS.find(c => c.key === selected)
+  const [orbFrom, orbTo] = activeCharacter?.colors ?? DEFAULT_ORB_COLORS
 
   useEffect(() => {
     const run = async () => {
@@ -150,12 +153,12 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
   }, [])
 
   const handleExplore = () => {
-    if (!activeIntention) return
+    if (!activeCharacter) return
     // Must be called synchronously inside this real tap to satisfy the
     // browser's autoplay policy — see the same pattern previously used for
     // the mood check-in submit.
     unlockAudio()
-    onStart(activeIntention.seed, true)
+    onStart(activeCharacter.seed, true, { key: activeCharacter.key, label: activeCharacter.label, personaPrompt: activeCharacter.personaPrompt })
   }
 
   const handleExploreExperiment = () => {
@@ -191,7 +194,7 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
           className="font-display font-light text-[22px] leading-snug text-white text-center mb-6"
           style={{ textShadow: '0 2px 12px rgba(0,0,0,0.15)' }}
         >
-          {greeting()}{name} — what are we looking into today?
+          {greeting()}{name} — who's hearing you out today?
         </h1>
 
         {/* Orb + four intentions orbiting it, in place of a grid of buttons.
@@ -207,17 +210,17 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
 
           {/* Connecting line from the selected planet to the orb — same
               visual language as the constellation screens' star-to-orb lines */}
-          {activeIntention && (
+          {activeCharacter && (
             <line
-              x1={activeIntention.x} y1={activeIntention.y} x2={ORB_X} y2={ORB_Y}
-              stroke={activeIntention.planetColor} strokeWidth="1.8" opacity="0.85"
+              x1={activeCharacter.x} y1={activeCharacter.y} x2={ORB_X} y2={ORB_Y}
+              stroke={activeCharacter.planetColor} strokeWidth="1.8" opacity="0.85"
             />
           )}
 
-          {INTENTIONS.map((intention, i) => (
+          {CHARACTERS.map((character, i) => (
             <g
-              key={intention.key}
-              onClick={() => setSelected(intention.key)}
+              key={character.key}
+              onClick={() => setSelected(character.key)}
               style={{
                 cursor: 'pointer',
                 transformBox: 'fill-box',
@@ -227,16 +230,16 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
                 opacity: 0
               }}
             >
-              <circle cx={intention.x} cy={intention.y} r="24" fill="transparent" />
+              <circle cx={character.x} cy={character.y} r="24" fill="transparent" />
               <circle
-                cx={intention.x} cy={intention.y}
-                r={selected === intention.key ? 11 : 9}
-                fill={intention.planetColor}
-                opacity={selected === intention.key ? 1 : 0.9}
+                cx={character.x} cy={character.y}
+                r={selected === character.key ? 11 : 9}
+                fill={character.planetColor}
+                opacity={selected === character.key ? 1 : 0.9}
                 style={{ transition: 'r 0.3s cubic-bezier(0.34,1.56,0.64,1)' }}
               />
-              <text x={intention.x} y={intention.y + intention.labelDy} textAnchor="middle" fontSize="13" fill="#F5F5FA">
-                {intention.label}
+              <text x={character.x} y={character.y + character.labelDy} textAnchor="middle" fontSize="13" fill="#F5F5FA">
+                {character.label}
               </text>
             </g>
           ))}
@@ -267,7 +270,7 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
 
         <button
           onClick={handleExplore}
-          disabled={!activeIntention}
+          disabled={!activeCharacter}
           className="w-full bg-white/90 text-[#3F5C9E] font-sans text-[15px] font-medium py-4 rounded-full shadow-[0_10px_30px_-8px_rgba(0,0,0,0.3)] disabled:opacity-40 disabled:shadow-none transition-all duration-300 mb-8"
         >
           Explore

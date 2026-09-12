@@ -42,6 +42,13 @@ export interface Memory {
 
 export type MessageRole = 'user' | 'assistant'
 
+/** A persona the person can choose to talk this conversation through. */
+export interface Character {
+  key: string
+  label: string
+  personaPrompt: string
+}
+
 export interface Message {
   id: string
   role: MessageRole
