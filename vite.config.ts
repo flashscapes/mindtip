@@ -12,6 +12,15 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
+      workbox: {
+        // Without this, the service worker's SPA fallback catches every
+        // browser navigation that doesn't match a precached asset --
+        // including a direct visit to an /api/ route -- and serves the
+        // cached index.html shell instead of ever reaching the function.
+        // Only affects direct browser navigation to a URL; fetch() calls
+        // from within the running app were never affected by this.
+        navigateFallbackDenylist: [/^\/api\//]
+      },
       manifest: {
         name: 'MindTip',
         short_name: 'MindTip',
