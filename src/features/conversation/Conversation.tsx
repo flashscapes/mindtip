@@ -12,6 +12,7 @@ import { CHARACTER_THEMES } from '@/lib/characterThemes'
 import { NoirSkyline } from './NoirSkyline'
 import { GothamSkyline } from './GothamSkyline'
 import { StudyDesk } from './StudyDesk'
+import { GlacierPeaks } from './GlacierPeaks'
 
 interface ConversationProps {
   profile: UserProfile
@@ -308,6 +309,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
         </>
       )}
       {theme?.atmosphere === 'study' && <StudyDesk />}
+      {theme?.atmosphere === 'arctic' && <GlacierPeaks />}
       <header className="relative flex items-center justify-between px-8 py-6" style={{ borderBottom: `1px solid ${theme?.accentColor ? theme.accentColor + '33' : 'rgba(37,56,58,0.08)'}` }}>
         <span className="font-sans text-[13px] tracking-[0.08em]" style={{ color: theme?.accentColor ?? '#345350' }}>MindTip</span>
         <div className="flex items-center gap-5">
