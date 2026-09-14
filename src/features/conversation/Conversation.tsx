@@ -8,6 +8,7 @@ import { useVoiceConversation } from '@/voice'
 import { ChatBubble } from './ChatBubble'
 import { Button } from '@/components/ui/Button'
 import { STORAGE_KEYS } from '@/lib/constants'
+import { CHARACTER_THEMES } from '@/lib/characterThemes'
 
 interface ConversationProps {
   profile: UserProfile
@@ -268,34 +269,55 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const theme = character ? CHARACTER_THEMES[character.key] : undefined
+
   return (
-    <div className="min-h-dvh bg-canvas flex flex-col max-w-md mx-auto">
-      <header className="flex items-center justify-between px-8 py-6" style={{ borderBottom: '1px solid rgba(37,56,58,0.08)' }}>
-        <span className="font-sans text-[13px] tracking-[0.08em] text-mist">MindTip</span>
+    <div
+      className={`min-h-dvh flex flex-col max-w-md mx-auto relative ${theme?.background ? '' : 'bg-canvas'}`}
+      style={theme?.background ? { background: theme.background } : undefined}
+    >
+      {theme?.atmosphere === 'noir' && (
+        <>
+          <div className="absolute inset-0 mindtip-noir-rain pointer-events-none" />
+          <div className="absolute inset-0 mindtip-noir-fog pointer-events-none" />
+          <svg viewBox="0 0 60 100" className="absolute bottom-4 right-4 w-14 opacity-25 pointer-events-none" style={{ filter: `drop-shadow(0 0 8px ${theme.accentColor})` }}>
+            <ellipse cx="30" cy="30" rx="14" ry="16" fill={theme.accentColor} />
+            <path d="M8 26 Q30 6 52 26 Q52 32 44 30 Q30 22 16 30 Q8 32 8 26 Z" fill={theme.accentColor} />
+          </svg>
+        </>
+      )}
+      <header className="relative flex items-center justify-between px-8 py-6" style={{ borderBottom: `1px solid ${theme?.accentColor ? theme.accentColor + '33' : 'rgba(37,56,58,0.08)'}` }}>
+        <span className="font-sans text-[13px] tracking-[0.08em]" style={{ color: theme?.accentColor ?? '#345350' }}>MindTip</span>
         <div className="flex items-center gap-5">
           {canReflect && (
             <button
               onClick={() => onReflectionReady(messages)}
-              className="text-[13px] text-bronze hover:opacity-80 transition-opacity duration-300"
+              className="text-[13px] hover:opacity-80 transition-opacity duration-300"
+              style={{ color: theme?.accentColor ?? '#B8935A' }}
             >
               ✦ Emerging Insights
             </button>
           )}
           <button
             onClick={() => (voice.enabled ? voice.disableVoiceConversation() : voice.enableVoiceConversation())}
-            className={`text-[13px] transition-colors duration-300 ${voice.enabled ? 'text-bronze' : 'text-mist hover:text-bronze'}`}
+            className="text-[13px] transition-colors duration-300"
+            style={{ color: voice.enabled ? (theme?.accentColor ?? '#B8935A') : '#345350' }}
           >
             {voice.enabled ? (voice.state === 'idle' ? 'Voice on' : voice.state) : 'Voice off'}
           </button>
-          <button onClick={handleExit} className="text-[13px] text-mist hover:text-bronze transition-colors duration-300">Close</button>
+          <button onClick={handleExit} className="text-[13px] transition-colors duration-300" style={{ color: theme?.accentColor ?? '#345350' }}>Close</button>
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-8 py-10 flex flex-col gap-6">
+      <div className="relative flex-1 overflow-y-auto px-8 py-10 flex flex-col gap-6">
         {messages.map(m => (
-          <ChatBubble key={m.id} message={m} />
+          <ChatBubble key={m.id} message={m} fontFamily={theme?.font} textColor={theme?.textColor} />
         ))}
-        {isThinking && <p className="text-mist italic text-[14px]">Thinking…</p>}
+        {isThinking && (
+          <p className={`italic text-[14px] ${theme?.textColor ? '' : 'text-mist'}`} style={theme?.textColor ? { color: theme.textColor, opacity: 0.7 } : undefined}>
+            Thinking…
+          </p>
+        )}
       </div>
 
       <form
@@ -304,14 +326,18 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
           void send(input)
         }}
         className="flex items-center gap-4 px-8 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
-        style={{ borderTop: '1px solid rgba(37,56,58,0.08)' }}
+        style={{ borderTop: `1px solid ${theme?.accentColor ? theme.accentColor + '33' : 'rgba(37,56,58,0.08)'}` }}
       >
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
           placeholder="Tell me what's on your mind…"
-          className="flex-1 bg-transparent text-[15px] text-ivory placeholder:text-mist outline-none pb-2"
-          style={{ borderBottom: '1px solid rgba(37,56,58,0.14)' }}
+          className={`flex-1 bg-transparent text-[15px] outline-none pb-2 ${theme?.textColor ? 'mindtip-themed-input' : 'text-ivory placeholder:text-mist'}`}
+          style={{
+            borderBottom: `1px solid ${theme?.accentColor ? theme.accentColor + '4D' : 'rgba(37,56,58,0.14)'}`,
+            color: theme?.textColor,
+            fontFamily: theme?.font
+          }}
         />
         <Button type="submit" disabled={!input.trim()}>Send</Button>
       </form>
