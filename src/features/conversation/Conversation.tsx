@@ -9,6 +9,7 @@ import { ChatBubble } from './ChatBubble'
 import { Button } from '@/components/ui/Button'
 import { STORAGE_KEYS } from '@/lib/constants'
 import { CHARACTER_THEMES } from '@/lib/characterThemes'
+import { NoirSkyline } from './NoirSkyline'
 
 interface ConversationProps {
   profile: UserProfile
@@ -271,6 +272,16 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
 
   const theme = character ? CHARACTER_THEMES[character.key] : undefined
 
+  // A small, stable (not re-randomized on every render) horizontal offset
+  // per message, derived from its id — this is what keeps a run of same-
+  // sender bubbles from lining up into a single straight edge. Only meant
+  // to be used when a theme actually supplies real bubbles.
+  const staggerFor = (messageId: string): number => {
+    let hash = 0
+    for (let i = 0; i < messageId.length; i++) hash = (hash * 31 + messageId.charCodeAt(i)) >>> 0
+    return hash % 26
+  }
+
   return (
     <div
       className={`min-h-dvh flex flex-col max-w-md mx-auto relative ${theme?.background ? '' : 'bg-canvas'}`}
@@ -278,6 +289,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     >
       {theme?.atmosphere === 'noir' && (
         <>
+          <NoirSkyline />
           <div className="absolute inset-0 mindtip-noir-rain pointer-events-none" />
           <div className="absolute inset-0 mindtip-noir-fog pointer-events-none" />
           <svg viewBox="0 0 60 100" className="absolute bottom-4 right-4 w-14 opacity-25 pointer-events-none" style={{ filter: `drop-shadow(0 0 8px ${theme.accentColor})` }}>
@@ -311,7 +323,14 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
 
       <div className="relative flex-1 overflow-y-auto px-8 py-10 flex flex-col gap-6">
         {messages.map(m => (
-          <ChatBubble key={m.id} message={m} fontFamily={theme?.font} textColor={theme?.textColor} />
+          <ChatBubble
+            key={m.id}
+            message={m}
+            fontFamily={theme?.font}
+            textColor={theme?.textColor}
+            bubbles={theme?.bubbles}
+            staggerOffset={theme?.bubbles ? staggerFor(m.id) : 0}
+          />
         ))}
         {isThinking && (
           <p className={`italic text-[14px] ${theme?.textColor ? '' : 'text-mist'}`} style={theme?.textColor ? { color: theme.textColor, opacity: 0.7 } : undefined}>
