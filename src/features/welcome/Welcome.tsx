@@ -2,146 +2,100 @@ interface WelcomeProps {
   onComplete: () => void
 }
 
-// Real character portraits go here — paths match what will be dropped into
-// public/assets/. Each card uses a layered CSS background (dark gradient +
-// image), so until the real file exists at that path, the card still
-// renders correctly as a styled dark frame with its label — no broken
-// image icons, no code changes needed once the real asset lands.
-const CHARACTER_SLOTS = [
-  { label: 'Astronaut', image: '/assets/astronaut.jpg' },
-  { label: 'Olympic Runner', image: '/assets/runner.jpg' },
-  { label: 'Action Hero', image: '/assets/action-hero.jpg' },
-  { label: 'Arctic Survivalist', image: '/assets/survivalist.jpg' }
+// Five character portrait slots — PLACEHOLDER FRAMEWORK ONLY. Real character
+// photos get supplied separately; set `image` on any slot once an asset
+// exists (e.g. '/assets/astronaut.jpg') and the placeholder panel is
+// replaced automatically, no other code changes needed. The first slot
+// renders a simple fedora-and-silhouette shape instead of a label — a
+// generic adventurer archetype, not a likeness of anyone specific.
+const CHARACTER_SLOTS: { image?: string; silhouette?: boolean }[] = [
+  { silhouette: true },
+  {},
+  {},
+  {},
+  {}
 ]
 
-function CharacterCard({ label, image }: { label: string; image: string }) {
+function CharacterPanel({ image, silhouette, clipPath, marginLeft }: { image?: string; silhouette?: boolean; clipPath: string; marginLeft?: number }) {
   return (
-    <button
-      className="group relative aspect-[4/5] rounded-2xl overflow-hidden transition-transform duration-300 hover:scale-[1.03]"
+    <div
+      className="relative flex-1 overflow-hidden"
       style={{
-        border: '1px solid rgba(255,255,255,0.2)',
-        boxShadow: '0 0 0 1px rgba(0,0,0,0.5), 0 14px 34px -10px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.08)'
+        clipPath,
+        marginLeft: marginLeft ? `${marginLeft}px` : undefined,
+        background: image ? undefined : 'linear-gradient(160deg, #242C38, #0A0E14)',
+        backgroundImage: image ? `linear-gradient(160deg, rgba(20,26,34,0.4), rgba(8,11,15,0.75)), url('${image}')` : undefined,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center'
       }}
     >
-      <div
-        className="absolute inset-0 bg-cover bg-center transition-transform duration-300 group-hover:scale-110"
-        style={{
-          backgroundImage: `linear-gradient(160deg, rgba(20,26,34,0.55), rgba(8,11,15,0.85)), url('${image}')`
-        }}
-      />
-      {/* Dark overlay that brightens slightly on hover, per spec */}
-      <div className="absolute inset-0 bg-black/25 group-hover:bg-black/10 transition-colors duration-300" />
-      {/* Illuminating border glow on hover */}
-      <div
-        className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-        style={{ boxShadow: 'inset 0 0 0 1.5px rgba(212,175,110,0.8), 0 0 20px 2px rgba(212,175,110,0.35)' }}
-      />
-      <p
-        className="absolute bottom-2 left-0 right-0 text-center font-sans text-[11px] tracking-[0.06em] text-white/90"
-        style={{ textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}
-      >
-        {label}
-      </p>
-    </button>
+      {silhouette && !image && (
+        <svg viewBox="0 0 60 100" className="absolute bottom-0 left-2 w-[70%] h-[90%]">
+          <ellipse cx="30" cy="30" rx="14" ry="16" fill="#05070A" />
+          <path d="M8 26 Q30 6 52 26 Q52 32 44 30 Q30 22 16 30 Q8 32 8 26 Z" fill="#05070A" />
+          <path d="M14 44 Q30 34 46 44 L50 100 L10 100 Z" fill="#05070A" />
+        </svg>
+      )}
+    </div>
   )
 }
 
 export function Welcome({ onComplete }: WelcomeProps) {
   return (
     <div
-      className="relative min-h-dvh flex flex-col items-center justify-center px-6 py-10 overflow-hidden"
-      style={{ background: 'linear-gradient(160deg, #262C36, #14181F 60%, #0A0D12)' }}
+      className="relative min-h-dvh flex flex-col items-center overflow-hidden"
+      style={{ background: 'linear-gradient(180deg, #0D1420 0%, #1A2740 45%, #3D5470 65%, #E8A855 80%, #7A9BC2 100%)' }}
     >
-      {/* Central radial glow */}
-      <div
-        className="absolute top-[30%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] rounded-full pointer-events-none"
-        style={{ background: 'radial-gradient(circle, rgba(212,175,110,0.18), transparent 70%)' }}
-      />
-      {/* Faint circuit-line texture */}
-      <div
-        className="absolute inset-0 opacity-[0.08] pointer-events-none"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px)',
-          backgroundSize: '38px 38px'
-        }}
-      />
-      {/* Mechanical globe/gear graphic behind the title */}
-      <svg viewBox="0 0 200 200" className="absolute top-[26%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-56 opacity-25 pointer-events-none">
-        <circle cx="100" cy="100" r="70" fill="none" stroke="#D4AF6E" strokeWidth="1" />
-        <circle cx="100" cy="100" r="55" fill="none" stroke="#D4AF6E" strokeWidth="0.5" strokeDasharray="3 5" />
-        <path d="M100 30 A70 70 0 0 1 165 100" fill="none" stroke="#D4AF6E" strokeWidth="1.5" />
-        <path d="M100 170 A70 70 0 0 1 35 100" fill="none" stroke="#D4AF6E" strokeWidth="1.5" />
-        {[0, 45, 90, 135, 180, 225, 270, 315].map(deg => (
-          <circle key={deg} cx={100 + 85 * Math.cos((deg * Math.PI) / 180)} cy={100 + 85 * Math.sin((deg * Math.PI) / 180)} r="3" fill="#D4AF6E" />
-        ))}
-      </svg>
-
-      <div className="relative z-10 w-full max-w-sm">
-        {/* Title badge */}
-        <div className="text-center mb-5">
-          <p
-            className="font-sans font-black text-[13px] tracking-[0.3em] mb-1"
-            style={{ color: 'rgba(255,255,255,0.55)' }}
-          >
-            WELCOME TO
-          </p>
-          <p
-            className="font-sans font-black text-[36px] tracking-[0.08em]"
-            style={{
-              transform: 'skewX(-3deg)',
-              backgroundImage: 'linear-gradient(180deg, #FFFFFF 20%, #B8BEC8 55%, #7A828F 100%)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              color: 'transparent',
-              filter: 'drop-shadow(0 0 14px rgba(255,255,255,0.35))'
-            }}
-          >
-            MINDTIP
-          </p>
-        </div>
-
-        {/* Four character cards */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          {CHARACTER_SLOTS.map(slot => (
-            <CharacterCard key={slot.label} label={slot.label} image={slot.image} />
-          ))}
-        </div>
-
-        {/* Body copy panel */}
-        <div
-          className="rounded-2xl px-5 py-5 mb-6 text-center"
-          style={{
-            background: 'linear-gradient(160deg, rgba(30,36,44,0.6), rgba(12,15,20,0.7))',
-            border: '1px solid rgba(255,255,255,0.08)'
-          }}
-        >
-          <p className="font-sans text-[13px] tracking-[0.25em] mb-3" style={{ color: '#D4AF6E' }}>
-            --- ◆ ---
-          </p>
-          <p className="font-sans text-[14px] leading-relaxed" style={{ color: '#D8D2C4' }}>
-            Explore life's challenges through the eyes of someone different — choose a character, step into their world, and see what they might say.
-          </p>
-        </div>
-
-        {/* CTA */}
-        <button
-          onClick={onComplete}
-          className="group relative w-full font-sans text-[15px] font-bold tracking-[0.06em] py-4 rounded-xl overflow-hidden transition-transform duration-300 hover:-translate-y-0.5"
-          style={{
-            color: '#3A2A0F',
-            background: 'linear-gradient(180deg, #F0D9A0, #D4AF6E 45%, #A9823F)',
-            boxShadow: '0 12px 28px -8px rgba(212,175,110,0.55), inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -2px 4px rgba(0,0,0,0.25)'
-          }}
-        >
-          {/* Shine sweep on hover */}
-          <span
-            className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out"
-            style={{ background: 'linear-gradient(100deg, transparent 40%, rgba(255,255,255,0.5) 50%, transparent 60%)' }}
-          />
-          <span className="relative">NEXT</span>
-        </button>
+      {/* Five angled character panels */}
+      <div className="relative w-full flex" style={{ height: '28vh', minHeight: 180 }}>
+        <CharacterPanel {...CHARACTER_SLOTS[0]} clipPath="polygon(0 0, 100% 0, 85% 100%, 0 100%)" />
+        <CharacterPanel {...CHARACTER_SLOTS[1]} clipPath="polygon(15% 0, 100% 0, 100% 100%, 0 100%)" marginLeft={-14} />
+        <CharacterPanel {...CHARACTER_SLOTS[2]} clipPath="polygon(15% 0, 100% 0, 85% 100%, 0 100%)" marginLeft={-14} />
+        <CharacterPanel {...CHARACTER_SLOTS[3]} clipPath="polygon(15% 0, 100% 0, 100% 100%, 0 100%)" marginLeft={-14} />
+        <CharacterPanel {...CHARACTER_SLOTS[4]} clipPath="polygon(15% 0, 100% 0, 100% 100%, 0 100%)" marginLeft={-14} />
       </div>
+
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 text-center w-full max-w-sm">
+        <p
+          className="font-sans text-[64px] leading-[0.9] tracking-[0.04em]"
+          style={{
+            fontFamily: "'Bebas Neue', sans-serif",
+            backgroundImage: 'linear-gradient(135deg, #8FD4F0 0%, #EAF6FF 28%, #FFFFFF 48%, #FFA35C 68%, #FF6B2E 100%)',
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            color: 'transparent',
+            filter: 'drop-shadow(0 2px 10px rgba(0,0,0,0.6))'
+          }}
+        >
+          MINDTIP
+        </p>
+        <p className="font-display italic text-[18px] mt-1.5 mb-1.5" style={{ color: '#E8C878' }}>
+          Therapy
+        </p>
+        <p
+          className="text-[13px] tracking-[0.15em]"
+          style={{ fontFamily: "'Bebas Neue', sans-serif", color: '#E8C878' }}
+        >
+          FRESH PERSPECTIVES THROUGH<br />DYNAMIC ROLES
+        </p>
+        <p className="font-display text-[15px] leading-relaxed mt-4 max-w-[240px]" style={{ color: '#F0EEE8' }}>
+          Choose a character. Talk through what's on your mind. Leave with a brand-new lens on your life.
+        </p>
+      </div>
+
+      <button
+        onClick={onComplete}
+        className="relative z-10 mb-8 rounded-full transition-transform duration-300 hover:-translate-y-0.5"
+        style={{
+          border: '1.5px solid #D4A94A',
+          background: 'rgba(10,14,20,0.6)',
+          padding: '12px 34px'
+        }}
+      >
+        <span style={{ fontFamily: "'Bebas Neue', sans-serif", color: '#E8C878', fontSize: 16, letterSpacing: '0.1em' }}>
+          NEXT →
+        </span>
+      </button>
     </div>
   )
 }

@@ -162,18 +162,51 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         className="absolute inset-0 bg-cover bg-center"
         style={{ backgroundImage: `url('/images/${step === 1 || step === 2 ? 'snowy-mountains' : 'welcome-mountains'}.jpg')` }}
       />
-      <div className="absolute inset-0 bg-gradient-to-b from-[#E9F5F3]/25 via-[#DCEFEC]/18 to-[#CFEAE5]/32" />
+      {step === 0 ? (
+        <>
+          <div className="absolute inset-0" style={{ background: 'radial-gradient(circle at 50% 35%, rgba(80,60,110,0.55), rgba(10,8,16,0.88) 75%)' }} />
+          <div
+            className="absolute inset-0 opacity-[0.08] pointer-events-none"
+            style={{
+              backgroundImage: 'linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px)',
+              backgroundSize: '38px 38px'
+            }}
+          />
+        </>
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-b from-[#E9F5F3]/25 via-[#DCEFEC]/18 to-[#CFEAE5]/32" />
+      )}
 
-      <div className="relative z-10 w-full max-w-sm rounded-[36px] px-[30px] py-[46px] flex flex-col justify-between" style={{ minHeight: '495px', background: 'rgba(255,255,255,0.88)', boxShadow: '0 26px 60px -12px rgba(0,0,0,0.45), 0 6px 16px -4px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.05)' }}>
+      <div
+        className="relative z-10 w-full max-w-sm rounded-[36px] px-[30px] py-[46px] flex flex-col justify-between"
+        style={
+          step === 0
+            ? { minHeight: '495px', background: 'rgba(20,16,28,0.75)', border: '1px solid rgba(180,150,220,0.2)', boxShadow: '0 26px 60px -12px rgba(0,0,0,0.6), 0 0 40px -10px rgba(140,100,200,0.3)' }
+            : { minHeight: '495px', background: 'rgba(255,255,255,0.88)', boxShadow: '0 26px 60px -12px rgba(0,0,0,0.45), 0 6px 16px -4px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.05)' }
+        }
+      >
       <div>
         {step === 0 && (
           <div>
-            <h1 className="font-display font-light text-[30px] leading-snug text-ivory mb-10">What should I call you?</h1>
+            <p
+              className="font-sans font-black text-[26px] leading-[1.15] mb-10"
+              style={{
+                letterSpacing: '0.02em',
+                transform: 'skewX(-4deg)',
+                backgroundImage: 'linear-gradient(180deg, #FFFFFF 20%, #B8BEC8 55%, #7A828F 100%)',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                color: 'transparent',
+                filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.3))'
+              }}
+            >
+              WHAT SHOULD<br />I CALL YOU?
+            </p>
             <input
               value={preferredName}
               onChange={e => setPreferredName(e.target.value)}
-              className="w-full bg-transparent text-[17px] text-ivory placeholder:text-mist/60 outline-none pb-3"
-              style={{ borderBottom: '1px solid rgba(37,56,58,0.28)' }}
+              className="w-full bg-transparent text-[17px] outline-none pb-3"
+              style={{ color: '#EFE6D0', borderBottom: '1px solid rgba(212,175,110,0.4)' }}
             />
           </div>
         )}
