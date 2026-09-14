@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button'
 import { STORAGE_KEYS } from '@/lib/constants'
 import { CHARACTER_THEMES } from '@/lib/characterThemes'
 import { NoirSkyline } from './NoirSkyline'
+import { GothamSkyline } from './GothamSkyline'
 
 interface ConversationProps {
   profile: UserProfile
@@ -299,6 +300,12 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
           </svg>
         </>
       )}
+      {theme?.atmosphere === 'gotham' && (
+        <>
+          <GothamSkyline />
+          <div className="absolute inset-0 mindtip-gotham-fog pointer-events-none" />
+        </>
+      )}
       <header className="relative flex items-center justify-between px-8 py-6" style={{ borderBottom: `1px solid ${theme?.accentColor ? theme.accentColor + '33' : 'rgba(37,56,58,0.08)'}` }}>
         <span className="font-sans text-[13px] tracking-[0.08em]" style={{ color: theme?.accentColor ?? '#345350' }}>MindTip</span>
         <div className="flex items-center gap-5">
@@ -356,7 +363,8 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
           style={{
             borderBottom: `1px solid ${theme?.accentColor ? theme.accentColor + '4D' : 'rgba(37,56,58,0.14)'}`,
             color: theme?.textColor,
-            fontFamily: theme?.font
+            fontFamily: theme?.font,
+            ['--mindtip-placeholder-color' as string]: theme?.placeholderColor
           }}
         />
         <Button type="submit" disabled={!input.trim()}>Send</Button>

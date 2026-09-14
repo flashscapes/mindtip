@@ -99,8 +99,13 @@ body {
   animation: mindtip-noir-fog-drift 22s ease-in-out infinite;
 }
 
+.mindtip-gotham-fog {
+  background: radial-gradient(ellipse at 30% 85%, rgba(74,127,224,0.14), transparent 60%);
+  animation: mindtip-noir-fog-drift 22s ease-in-out infinite;
+}
+
 .mindtip-themed-input::placeholder {
-  color: rgba(232, 223, 200, 0.4);
+  color: var(--mindtip-placeholder-color, rgba(232, 223, 200, 0.4));
 }
 
 .mindtip-starfield {

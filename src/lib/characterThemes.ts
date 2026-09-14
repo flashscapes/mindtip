@@ -16,8 +16,9 @@ export interface CharacterTheme {
   font: string
   background?: string
   textColor?: string
+  placeholderColor?: string
   accentColor?: string
-  atmosphere?: 'noir'
+  atmosphere?: 'noir' | 'gotham'
   bubbles?: BubbleTheme
 }
 
@@ -26,6 +27,7 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
     font: "'Special Elite', monospace",
     background: 'linear-gradient(160deg, #1a1a1a, #0f0f0f)',
     textColor: '#E8DFC8',
+    placeholderColor: 'rgba(232,223,200,0.4)',
     accentColor: '#c9a227',
     atmosphere: 'noir',
     bubbles: {
@@ -36,9 +38,23 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
       timestampColor: 'rgba(201,162,39,0.65)'
     }
   },
+  batman: {
+    font: "'Cinzel', serif",
+    background: 'linear-gradient(180deg, #050810 0%, #0A1220 45%, #0D1830 100%)',
+    textColor: '#C8DCF5',
+    placeholderColor: 'rgba(200,220,245,0.4)',
+    accentColor: '#D4AF37',
+    atmosphere: 'gotham',
+    bubbles: {
+      assistantBg: 'linear-gradient(160deg, #1A2B4D, #0D1830)',
+      assistantText: '#C8DCF5',
+      userBg: 'linear-gradient(160deg, #4A7FE0, #2A4A8A)',
+      userText: '#EAF2FF',
+      timestampColor: 'rgba(212,175,55,0.75)'
+    }
+  },
   comedian: { font: "'Permanent Marker', cursive" },
   historian: { font: "'EB Garamond', serif" },
   survivalist: { font: "'Oswald', sans-serif" },
-  batman: { font: "'Cinzel', serif" },
   astronaut: { font: "'Orbitron', sans-serif" }
 }
