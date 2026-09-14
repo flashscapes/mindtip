@@ -8,21 +8,36 @@
 // Default path: OpenAI TTS (shimmer voice) -- unchanged from before.
 // Requires env var: OPENAI_API_KEY.
 //
-// voice=noir-detective path: Cartesia Sonic instead, with a real voice
-// picked from the actual library (Ronald - Thinker: "intense, deep young
-// adult male") plus generation_config.emotion to push the delivery toward
-// something more dramatic than a flat reading -- both are current, stable
-// (non-experimental) Cartesia TTS request fields as of API version
-// 2026-08-14, not the deprecated __experimental_controls path.
+// voice=noir-detective / voice=batman paths: Cartesia Sonic instead, with
+// real voices picked from the actual library (see CARTESIA_VOICES below for
+// which one and why) plus generation_config to push delivery toward
+// something more dramatic than a flat reading -- both speed and emotion are
+// current, stable (non-experimental) Cartesia TTS request fields as of API
+// version 2026-08-14, not the deprecated __experimental_controls path.
 // Requires env var: CARTESIA_API_KEY.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const CARTESIA_VOICES: Record<string, string> = {
-  'noir-detective': '5ee9feff-1265-424a-9d7f-8e4d431a12c7' // Ronald - Thinker
+interface CartesiaVoiceConfig {
+  voiceId: string;
+  speed: number; // 0.6-1.5
+  emotion: string;
+}
+
+const CARTESIA_VOICES: Record<string, CartesiaVoiceConfig> = {
+  'noir-detective': {
+    voiceId: '5ee9feff-1265-424a-9d7f-8e4d431a12c7', // Ronald - Thinker: "intense, deep young adult male"
+    speed: 0.9,
+    emotion: 'mysterious'
+  },
+  batman: {
+    voiceId: 'dbfa416f-d5c3-4006-854b-235ef6bdf4fd', // Damon - Commanding Narrator: "deep and serious... steady gravitas"
+    speed: 0.92,
+    emotion: 'determined'
+  }
 };
 
-async function speakWithCartesia(text: string, voiceId: string): Promise<Buffer> {
+async function speakWithCartesia(text: string, config: CartesiaVoiceConfig): Promise<Buffer> {
   const res = await fetch('https://api.cartesia.ai/tts/bytes', {
     method: 'POST',
     headers: {
@@ -33,11 +48,11 @@ async function speakWithCartesia(text: string, voiceId: string): Promise<Buffer>
     body: JSON.stringify({
       model_id: 'sonic-3.6',
       transcript: text,
-      voice: { id: voiceId },
+      voice: { id: config.voiceId },
       output_format: { container: 'mp3', sample_rate: 44100, bit_rate: 128000 },
       generation_config: {
-        speed: 0.9,
-        emotion: 'mysterious'
+        speed: config.speed,
+        emotion: config.emotion
       }
     })
   });
@@ -88,9 +103,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const cartesiaVoiceId = CARTESIA_VOICES[voiceKey];
-    const audioBuffer = cartesiaVoiceId
-      ? await speakWithCartesia(text, cartesiaVoiceId)
+    const cartesiaConfig = CARTESIA_VOICES[voiceKey];
+    const audioBuffer = cartesiaConfig
+      ? await speakWithCartesia(text, cartesiaConfig)
       : await speakWithOpenAI(text);
 
     res.setHeader('Content-Type', 'audio/mpeg');
