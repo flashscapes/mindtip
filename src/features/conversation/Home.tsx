@@ -173,13 +173,16 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleExplore = () => {
-    if (!activeCharacter) return
-    // Must be called synchronously inside this real tap to satisfy the
-    // browser's autoplay policy — see the same pattern previously used for
-    // the mood check-in submit.
+  const handleSelectCharacter = (character: (typeof CHARACTERS)[number]) => {
+    setSelected(character.key)
+    // Let the connecting line actually be seen before advancing — this
+    // delay is the point, not a workaround. unlockAudio() still fires
+    // inside this same synchronous tap handler (required for autoplay),
+    // even though onStart itself fires a moment later.
     unlockAudio()
-    onStart(activeCharacter.seed, true, { key: activeCharacter.key, label: activeCharacter.label, personaPrompt: activeCharacter.personaPrompt })
+    setTimeout(() => {
+      onStart(character.seed, true, { key: character.key, label: character.label, personaPrompt: character.personaPrompt })
+    }, 700)
   }
 
   const handleExploreExperiment = () => {
@@ -199,8 +202,8 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
 
   return (
     <div
-      className="relative min-h-dvh flex flex-col px-8 py-14 overflow-hidden bg-cover bg-center"
-      style={{ backgroundImage: "url('/images/mindtip-home.jpg')" }}
+      className="relative min-h-dvh flex flex-col px-8 py-14 overflow-hidden bg-center"
+      style={{ backgroundImage: "url('/images/mindtip-home.jpg')", backgroundSize: '75%', backgroundColor: '#0A0D12' }}
     >
       {/* Readability wash over the photo — content stays legible without hiding the image */}
       <div
@@ -241,7 +244,7 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
           {CHARACTERS.map((character, i) => (
             <g
               key={character.key}
-              onClick={() => setSelected(character.key)}
+              onClick={() => handleSelectCharacter(character)}
               style={{
                 cursor: 'pointer',
                 transformBox: 'fill-box',
@@ -251,15 +254,19 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
                 opacity: 0
               }}
             >
-              <circle cx={character.x} cy={character.y} r="24" fill="transparent" />
-              <circle
-                cx={character.x} cy={character.y}
-                r={selected === character.key ? 11 : 9}
-                fill={character.planetColor}
-                opacity={selected === character.key ? 1 : 0.9}
-                style={{ transition: 'r 0.3s cubic-bezier(0.34,1.56,0.64,1)' }}
-              />
-              <text x={character.x} y={character.y + character.labelDy} textAnchor="middle" fontSize="13" fill="#F5F5FA">
+              <circle cx={character.x} cy={character.y} r="26" fill="transparent" />
+              <text
+                x={character.x}
+                y={character.y + character.labelDy}
+                textAnchor="middle"
+                fontSize={selected === character.key ? 14 : 13}
+                fontWeight={selected === character.key ? 700 : 400}
+                fill={selected === character.key ? character.planetColor : '#F5F5FA'}
+                style={{
+                  transition: 'font-size 0.3s cubic-bezier(0.34,1.56,0.64,1), fill 0.3s',
+                  filter: selected === character.key ? `drop-shadow(0 0 6px ${character.planetColor})` : 'none'
+                }}
+              >
                 {character.label}
               </text>
             </g>
@@ -288,14 +295,6 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
             </radialGradient>
           </defs>
         </svg>
-
-        <button
-          onClick={handleExplore}
-          disabled={!activeCharacter}
-          className="w-full bg-white/90 text-[#3F5C9E] font-sans text-[15px] font-medium py-4 rounded-full shadow-[0_10px_30px_-8px_rgba(0,0,0,0.3)] disabled:opacity-40 disabled:shadow-none transition-all duration-300 mb-8"
-        >
-          Explore
-        </button>
 
         <form
           onSubmit={e => {
