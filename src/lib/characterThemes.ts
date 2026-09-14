@@ -12,14 +12,24 @@ export interface BubbleTheme {
   timestampColor: string
 }
 
+// For themes that render as plain text rather than bubbles (see the
+// Historian below) but still want the two speakers visually distinct --
+// two different "ink" colors instead of one text color plus opacity.
+export interface InkColors {
+  assistant: string
+  user: string
+}
+
 export interface CharacterTheme {
   font: string
   background?: string
   textColor?: string
   placeholderColor?: string
   accentColor?: string
-  atmosphere?: 'noir' | 'gotham'
+  atmosphere?: 'noir' | 'gotham' | 'study'
   bubbles?: BubbleTheme
+  inkColors?: InkColors
+  lineHeight?: number
 }
 
 export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
@@ -53,8 +63,21 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
       timestampColor: 'rgba(212,175,55,0.75)'
     }
   },
+  historian: {
+    font: "'EB Garamond', serif",
+    background:
+      'repeating-linear-gradient(95deg, rgba(0,0,0,0.09) 0px, rgba(0,0,0,0.09) 1px, transparent 1px, transparent 8px), ' +
+      'repeating-linear-gradient(95deg, rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 2px, transparent 2px, transparent 21px), ' +
+      'radial-gradient(ellipse at 28% 15%, rgba(255,255,255,0.07), transparent 55%), ' +
+      'linear-gradient(160deg, #6B4226 0%, #4A2C17 55%, #3A2110 100%)',
+    textColor: '#3A2E14',
+    placeholderColor: 'rgba(58,46,20,0.4)',
+    accentColor: '#9C7A2E',
+    atmosphere: 'study',
+    inkColors: { assistant: '#3A2E14', user: '#1E3A6E' },
+    lineHeight: 28
+  },
   comedian: { font: "'Permanent Marker', cursive" },
-  historian: { font: "'EB Garamond', serif" },
   survivalist: { font: "'Oswald', sans-serif" },
   astronaut: { font: "'Orbitron', sans-serif" }
 }

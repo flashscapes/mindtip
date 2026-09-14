@@ -11,6 +11,7 @@ import { STORAGE_KEYS } from '@/lib/constants'
 import { CHARACTER_THEMES } from '@/lib/characterThemes'
 import { NoirSkyline } from './NoirSkyline'
 import { GothamSkyline } from './GothamSkyline'
+import { StudyDesk } from './StudyDesk'
 
 interface ConversationProps {
   profile: UserProfile
@@ -306,6 +307,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
           <div className="absolute inset-0 mindtip-gotham-fog pointer-events-none" />
         </>
       )}
+      {theme?.atmosphere === 'study' && <StudyDesk />}
       <header className="relative flex items-center justify-between px-8 py-6" style={{ borderBottom: `1px solid ${theme?.accentColor ? theme.accentColor + '33' : 'rgba(37,56,58,0.08)'}` }}>
         <span className="font-sans text-[13px] tracking-[0.08em]" style={{ color: theme?.accentColor ?? '#345350' }}>MindTip</span>
         <div className="flex items-center gap-5">
@@ -329,7 +331,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
         </div>
       </header>
 
-      <div className="relative flex-1 overflow-y-auto px-8 py-10 flex flex-col gap-6">
+      <div className="relative flex-1 overflow-y-auto px-8 py-10 flex flex-col gap-6" style={theme?.atmosphere === 'study' ? { paddingLeft: 60 } : undefined}>
         {messages.map(m => (
           <ChatBubble
             key={m.id}
@@ -338,6 +340,8 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
             textColor={theme?.textColor}
             bubbles={theme?.bubbles}
             staggerOffset={theme?.bubbles ? staggerFor(m.id) : 0}
+            inkColors={theme?.inkColors}
+            lineHeight={theme?.lineHeight}
           />
         ))}
         {isThinking && (

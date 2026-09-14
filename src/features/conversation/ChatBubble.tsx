@@ -1,5 +1,5 @@
 import type { Message } from '@/types'
-import type { BubbleTheme } from '@/lib/characterThemes'
+import type { BubbleTheme, InkColors } from '@/lib/characterThemes'
 import { TipCard } from './TipCard'
 
 function formatTime(iso: string): string {
@@ -32,13 +32,17 @@ export function ChatBubble({
   fontFamily,
   textColor,
   bubbles,
-  staggerOffset = 0
+  staggerOffset = 0,
+  inkColors,
+  lineHeight
 }: {
   message: Message
   fontFamily?: string
   textColor?: string
   bubbles?: BubbleTheme
   staggerOffset?: number
+  inkColors?: InkColors
+  lineHeight?: number
 }) {
   const isUser = message.role === 'user'
 
@@ -71,6 +75,25 @@ export function ChatBubble({
           </p>
           {message.tip && <TipCard tip={message.tip} />}
         </div>
+      </div>
+    )
+  }
+
+  if (inkColors) {
+    return (
+      <div className="flex flex-col items-start">
+        <p
+          className="max-w-[90%] text-[16px]"
+          style={{
+            fontFamily,
+            lineHeight: lineHeight ? `${lineHeight}px` : undefined,
+            color: isUser ? inkColors.user : inkColors.assistant,
+            fontStyle: isUser ? 'normal' : 'italic'
+          }}
+        >
+          {message.content}
+        </p>
+        {message.tip && <TipCard tip={message.tip} />}
       </div>
     )
   }
