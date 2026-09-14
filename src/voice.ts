@@ -40,8 +40,10 @@ function splitIntoSentences(text: string): string[] {
   return matches.map(s => s.trim()).filter(Boolean);
 }
 
-async function fetchSpeechBlob(sentence: string): Promise<Blob> {
-  const res = await fetch(`/api/speak?text=${encodeURIComponent(sentence)}`);
+async function fetchSpeechBlob(sentence: string, voiceKey?: string): Promise<Blob> {
+  const params = new URLSearchParams({ text: sentence });
+  if (voiceKey) params.set('voice', voiceKey);
+  const res = await fetch(`/api/speak?${params.toString()}`);
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`TTS fetch failed: HTTP ${res.status} — ${body.slice(0, 200)}`);
@@ -60,13 +62,13 @@ async function fetchSpeechBlob(sentence: string): Promise<Blob> {
  *  the background — by the time sentence 1 finishes playing, sentence 2 is
  *  very likely already done fetching. Plays strictly in order regardless
  *  of which fetch resolves first. */
-async function speakText(text: string, onDebug?: (msg: string) => void): Promise<void> {
+async function speakText(text: string, voiceKey?: string, onDebug?: (msg: string) => void): Promise<void> {
   const requestId = ++currentRequestId;
   const sentences = splitIntoSentences(text);
   onDebug?.(`Requesting speech for ${sentences.length} sentence(s) in parallel…`);
 
   const blobPromises = sentences.map(s =>
-    fetchSpeechBlob(s).catch(err => {
+    fetchSpeechBlob(s, voiceKey).catch(err => {
       onDebug?.(`Segment fetch failed, skipping: ${err.message}`);
       return null;
     })
@@ -339,14 +341,14 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
 
   /** Call whenever MindTip has a new response. Auto-starts listening when done speaking. */
   const speakResponse = useCallback(
-    async (text: string) => {
+    async (text: string, voiceKey?: string) => {
       if (!enabledRef.current) {
         logDebug('speakResponse called but voice is not enabled — skipped');
         return;
       }
       setState('speaking');
       try {
-        await speakText(text, logDebug);
+        await speakText(text, voiceKey, logDebug);
       } catch (err) {
         logDebug(`Error: ${err instanceof Error ? err.message : String(err)}`);
         console.error('Speech playback failed:', err);

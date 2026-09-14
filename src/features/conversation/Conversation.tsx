@@ -182,7 +182,8 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     void voice.speakResponse(
       justCrossedSuggestionThreshold
         ? `${response.replyText} By the way, there's an Emerging Insights option now if you'd like to see what's coming together — just say "yes", or keep going.`
-        : response.replyText
+        : response.replyText,
+      character?.key
     )
   }
 
