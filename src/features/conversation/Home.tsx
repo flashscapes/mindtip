@@ -308,15 +308,26 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
               personaPrompt: `Speak in the voice, tone, and worldview of ${name} — draw naturally on how they think and their way of seeing things, and keep this consistent for the whole conversation. If ${name} is a real, currently-living private individual (not a public figure, historical person, or fictional/archetypal character), do not attempt to impersonate them specifically — instead adopt a general, plausible voice fitting that description.`
             })
           }}
-          className="w-full"
+          className="w-full flex items-center gap-2 rounded-full pl-5 pr-1.5 py-1.5"
+          style={{ background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(8px)' }}
         >
           <input
             value={text}
             onChange={e => setText(e.target.value)}
             placeholder="Name another character…"
-            className="w-full bg-transparent text-[15px] text-white placeholder:text-white/60 outline-none pb-3 text-center focus:border-white/60 transition-colors duration-300"
-            style={{ borderBottom: '1px solid rgba(255,255,255,0.3)' }}
+            className="flex-1 bg-transparent text-[15px] text-white placeholder:text-white/60 outline-none py-2"
           />
+          <button
+            type="submit"
+            disabled={!text.trim()}
+            aria-label="Start conversation with this character"
+            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-opacity duration-200 disabled:opacity-30"
+            style={{ background: 'linear-gradient(135deg, #D4C8A8, #7A6B4A)' }}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#1A1409" strokeWidth="2.5">
+              <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </form>
 
         {experiment && (
