@@ -20,43 +20,64 @@ interface HomeProps {
 // Each character becomes the voice for the whole conversation. The seed is
 // a neutral opener — the actual topic is whatever the person brings up
 // next — while personaPrompt does the real work of making the voice
-// genuinely distinct, not just a costume in name only.
+// genuinely distinct, not just a costume in name only. Six positions
+// arranged evenly around the orbit ring, 60° apart.
+const NEUTRAL_SEED = "I want to talk something through."
+
 const CHARACTERS = [
   {
     key: 'astronaut',
     label: 'Astronaut',
-    seed: "I want to talk something through.",
+    seed: NEUTRAL_SEED,
     personaPrompt: "Speak like a veteran astronaut: calm under pressure, precise, thinks in terms of checklists, systems, and controlled risk. Draws naturally on the isolation and perspective of spaceflight — the vastness of space makes problems feel both small and worth taking seriously. Measured, unhurried, never dramatic.",
     colors: ['#9AC4CC', '#3D7A85'],
     planetColor: '#CFE0F5',
     x: 150, y: 50, labelDy: -18
   },
   {
-    key: 'runner',
-    label: 'Olympic Runner',
-    seed: "I want to talk something through.",
-    personaPrompt: "Speak like an elite Olympic distance runner: disciplined, direct, thinks in terms of pacing, training cycles, and mental toughness built through repetition. Talks about setbacks as part of training, not failure. Warm but no-nonsense — respects effort, impatient with excuses, genuinely encouraging without empty cheerleading.",
-    colors: ['#E3CFA0', '#B8935A'],
-    planetColor: '#E0CFF5',
-    x: 250, y: 150, labelDy: 4
+    key: 'historian',
+    label: 'History Professor',
+    seed: NEUTRAL_SEED,
+    personaPrompt: "Speak like a warm, erudite history professor: draws connections across eras, contextualizes problems within larger patterns of human behavior, patient and thorough but never condescending. Uses historical parallels naturally to illuminate the present. Genuinely curious, values nuance over simple answers.",
+    colors: ['#C9A876', '#7A5A2A'],
+    planetColor: '#E8D4A0',
+    x: 236, y: 100, labelDy: -14
   },
   {
-    key: 'action-hero',
-    label: 'Action Hero',
-    seed: "I want to talk something through.",
-    personaPrompt: "Speak like a seasoned leading action star: confident, a little wry, cuts straight to what matters. Thinks in terms of decisive action over endless deliberation, but isn't reckless — has genuine instinct for reading a situation. Occasionally dryly funny. Doesn't do lengthy speeches.",
-    colors: ['#8FE0D0', '#4FAE9E'],
-    planetColor: '#F5E0CF',
-    x: 150, y: 250, labelDy: 22
+    key: 'comedian',
+    label: 'Irreverent Comedian',
+    seed: NEUTRAL_SEED,
+    personaPrompt: "Speak like a sharp, irreverent stand-up comedian: quick, observational, cuts through self-seriousness with humor, but underneath the jokes is real insight — comedians often see uncomfortable truths clearly precisely because they're willing to say them out loud. Never mean-spirited, always a little playful.",
+    colors: ['#F0A0A0', '#B85A5A'],
+    planetColor: '#F0B8B8',
+    x: 236, y: 200, labelDy: 22
   },
   {
     key: 'survivalist',
     label: 'Arctic Survivalist',
-    seed: "I want to talk something through.",
+    seed: NEUTRAL_SEED,
     personaPrompt: "Speak like a seasoned solo wilderness survivalist: plainspoken, resourceful, deeply comfortable with discomfort. Thinks in terms of what's actually within your control right now versus what isn't, conserving energy for what matters, and respecting hard truths rather than sugar-coating them. Quietly steady, not stoic to the point of coldness.",
     colors: ['#E3EDA0', '#9BCB74'],
     planetColor: '#CFF5E0',
-    x: 50, y: 150, labelDy: 4
+    x: 150, y: 250, labelDy: 22
+  },
+  {
+    key: 'batman',
+    label: 'Batman',
+    seed: NEUTRAL_SEED,
+    personaPrompt: "Speak like a brooding, disciplined vigilante detective: terse, methodical, thinks several steps ahead, treats every problem as something to be investigated and solved through discipline and preparation rather than luck. Carries real weight and seriousness, rarely lighthearted, but never cruel. Describe this persona in your own original words — never quote or reproduce actual dialogue, storylines, or specific scenes from any existing film or comic.",
+    colors: ['#5A6B8A', '#1A2438'],
+    planetColor: '#A0AEC8',
+    x: 63, y: 200, labelDy: 22
+  },
+  {
+    key: 'noir-detective',
+    label: '1940s Noir Detective',
+    seed: NEUTRAL_SEED,
+    personaPrompt: "Speak like a hardboiled 1940s private detective: terse, cynical on the surface but with a real moral code underneath, narrates observations with dry wit, treats every situation like a case to be worked with patience and street smarts. Uses period-flavored phrasing naturally, not as a gimmick.",
+    colors: ['#B8AC94', '#5A5040'],
+    planetColor: '#D4C8A8',
+    x: 63, y: 100, labelDy: -14
   }
 ] as const
 
@@ -178,21 +199,21 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
 
   return (
     <div
-      className="relative min-h-dvh flex flex-col px-8 py-14 overflow-hidden"
-      style={{
-        background: [
-          'radial-gradient(circle at 75% 15%, rgba(150,220,190,0.35), transparent 45%)',
-          'radial-gradient(circle at 20% 85%, rgba(120,150,230,0.3), transparent 50%)',
-          'linear-gradient(135deg, #3F5C9E 0%, #6455A8 30%, #8A4F9C 55%, #4F9C82 100%)'
-        ].join(', ')
-      }}
+      className="relative min-h-dvh flex flex-col px-8 py-14 overflow-hidden bg-cover bg-center"
+      style={{ backgroundImage: "url('/images/mindtip-home.jpg')" }}
     >
+      {/* Readability wash over the photo — content stays legible without hiding the image */}
+      <div
+        className="absolute inset-0"
+        style={{ background: 'linear-gradient(to bottom, rgba(5,5,10,0.55), rgba(5,5,10,0.15) 30%, rgba(5,5,10,0.15) 70%, rgba(5,5,10,0.6))' }}
+      />
+
       <p className="relative z-10 font-sans text-[13px] tracking-[0.08em] text-white/80">MindTip</p>
 
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center w-full max-w-sm mx-auto">
         <h1
-          className="font-display font-light text-[22px] leading-snug text-white text-center mb-6"
-          style={{ textShadow: '0 2px 12px rgba(0,0,0,0.15)' }}
+          className="font-sans text-[24px] leading-snug text-white text-center mb-6"
+          style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.04em', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}
         >
           {greeting()}{name} — who's hearing you out today?
         </h1>
@@ -279,14 +300,21 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
         <form
           onSubmit={e => {
             e.preventDefault()
-            if (text.trim()) onStart(text.trim())
+            const name = text.trim()
+            if (!name) return
+            unlockAudio()
+            onStart(NEUTRAL_SEED, true, {
+              key: 'custom',
+              label: name,
+              personaPrompt: `Speak in the voice, tone, and worldview of ${name} — draw naturally on how they think and their way of seeing things, and keep this consistent for the whole conversation. If ${name} is a real, currently-living private individual (not a public figure, historical person, or fictional/archetypal character), do not attempt to impersonate them specifically — instead adopt a general, plausible voice fitting that description.`
+            })
           }}
           className="w-full"
         >
           <input
             value={text}
             onChange={e => setText(e.target.value)}
-            placeholder="Or tell me what's on your mind…"
+            placeholder="Name another character…"
             className="w-full bg-transparent text-[15px] text-white placeholder:text-white/60 outline-none pb-3 text-center focus:border-white/60 transition-colors duration-300"
             style={{ borderBottom: '1px solid rgba(255,255,255,0.3)' }}
           />
