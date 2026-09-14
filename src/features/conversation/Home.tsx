@@ -24,66 +24,75 @@ interface HomeProps {
 // arranged evenly around the orbit ring, 60° apart.
 const NEUTRAL_SEED = "I want to talk something through."
 
+// Positions are the *actual measured pixel centers* of each portrait in
+// mindtip-home-ring.jpg (572x810, after cropping out the empty starfield
+// margin) — not an abstract layout. The SVG overlay below uses the exact
+// same viewBox as the image's native pixel size, and the two are rendered
+// stacked in one shared box, so a label can never drift from its portrait
+// again regardless of screen width. Colors are sampled from each
+// character's actual ring color in that image, for the same reason.
 const CHARACTERS = [
   {
     key: 'astronaut',
     label: 'Astronaut',
     seed: NEUTRAL_SEED,
     personaPrompt: "Speak like a veteran astronaut: calm under pressure, precise, thinks in terms of checklists, systems, and controlled risk. Draws naturally on the isolation and perspective of spaceflight — the vastness of space makes problems feel both small and worth taking seriously. Measured, unhurried, never dramatic.",
-    colors: ['#9AC4CC', '#3D7A85'],
-    planetColor: '#CFE0F5',
-    x: 150, y: 50, labelDy: -18
+    colors: ['#6DD8E0', '#1F6B75'],
+    planetColor: '#A8ECEF',
+    x: 283, y: 100, labelDy: 125
   },
   {
     key: 'historian',
     label: 'History Professor',
     seed: NEUTRAL_SEED,
     personaPrompt: "Speak like a warm, erudite history professor: draws connections across eras, contextualizes problems within larger patterns of human behavior, patient and thorough but never condescending. Uses historical parallels naturally to illuminate the present. Genuinely curious, values nuance over simple answers.",
-    colors: ['#C9A876', '#7A5A2A'],
+    colors: ['#D9B24D', '#7A5A2A'],
     planetColor: '#E8D4A0',
-    x: 236, y: 100, labelDy: -14
+    x: 475, y: 560, labelDy: -100
   },
   {
     key: 'comedian',
     label: 'Irreverent Comedian',
     seed: NEUTRAL_SEED,
     personaPrompt: "Speak like a sharp, irreverent stand-up comedian: quick, observational, cuts through self-seriousness with humor, but underneath the jokes is real insight — comedians often see uncomfortable truths clearly precisely because they're willing to say them out loud. Never mean-spirited, always a little playful.",
-    colors: ['#F0A0A0', '#B85A5A'],
-    planetColor: '#F0B8B8',
-    x: 236, y: 200, labelDy: 22
+    colors: ['#F0A868', '#7A4A18'],
+    planetColor: '#F5C088',
+    x: 98, y: 560, labelDy: -100
   },
   {
     key: 'survivalist',
     label: 'Arctic Survivalist',
     seed: NEUTRAL_SEED,
     personaPrompt: "Speak like a seasoned solo wilderness survivalist: plainspoken, resourceful, deeply comfortable with discomfort. Thinks in terms of what's actually within your control right now versus what isn't, conserving energy for what matters, and respecting hard truths rather than sugar-coating them. Quietly steady, not stoic to the point of coldness.",
-    colors: ['#E3EDA0', '#9BCB74'],
-    planetColor: '#CFF5E0',
-    x: 150, y: 250, labelDy: 22
+    colors: ['#D8D8E8', '#6A6A80'],
+    planetColor: '#F0F0F8',
+    x: 283, y: 710, labelDy: -100
   },
   {
     key: 'batman',
     label: 'Batman',
     seed: NEUTRAL_SEED,
     personaPrompt: "Speak like a brooding, disciplined vigilante detective: terse, methodical, thinks several steps ahead, treats every problem as something to be investigated and solved through discipline and preparation rather than luck. Carries real weight and seriousness, rarely lighthearted, but never cruel. Describe this persona in your own original words — never quote or reproduce actual dialogue, storylines, or specific scenes from any existing film or comic.",
-    colors: ['#5A6B8A', '#1A2438'],
-    planetColor: '#A0AEC8',
-    x: 63, y: 200, labelDy: 22
+    colors: ['#4A7FE0', '#17284F'],
+    planetColor: '#8FB4F0',
+    x: 475, y: 250, labelDy: 100
   },
   {
     key: 'noir-detective',
     label: '1940s Noir Detective',
     seed: NEUTRAL_SEED,
     personaPrompt: "Speak like a hardboiled 1940s private detective: terse, cynical on the surface but with a real moral code underneath, narrates observations with dry wit, treats every situation like a case to be worked with patience and street smarts. Uses period-flavored phrasing naturally, not as a gimmick.",
-    colors: ['#B8AC94', '#5A5040'],
-    planetColor: '#D4C8A8',
-    x: 63, y: 100, labelDy: -14
+    colors: ['#6AC97D', '#245C30'],
+    planetColor: '#A8E8B5',
+    x: 98, y: 250, labelDy: 100
   }
 ] as const
 
 const DEFAULT_ORB_COLORS: readonly [string, string] = ['#A79AE0', '#4A4080']
-const ORB_X = 150
-const ORB_Y = 150
+const RING_VIEWBOX_W = 572
+const RING_VIEWBOX_H = 810
+const ORB_X = 286
+const ORB_Y = 405
 
 function greeting(): string {
   const hour = new Date().getHours()
@@ -202,14 +211,13 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
 
   return (
     <div
-      className="relative min-h-dvh flex flex-col px-8 py-14 overflow-hidden bg-center"
-      style={{ backgroundImage: "url('/images/mindtip-home.jpg')", backgroundSize: '75%', backgroundColor: '#0A0D12' }}
+      className="relative min-h-dvh flex flex-col px-8 py-14 overflow-hidden"
+      style={{ background: 'radial-gradient(ellipse 140% 70% at 50% 10%, #241a3d 0%, #0A0D12 60%), #05060a' }}
     >
-      {/* Readability wash over the photo — content stays legible without hiding the image */}
-      <div
-        className="absolute inset-0"
-        style={{ background: 'linear-gradient(to bottom, rgba(5,5,10,0.55), rgba(5,5,10,0.15) 30%, rgba(5,5,10,0.15) 70%, rgba(5,5,10,0.6))' }}
-      />
+      {/* Plain CSS starfield — small repeating dot pattern, so unlike a
+          photo it's actually meant to tile and can never show a visible
+          seam or a duplicated character portrait. */}
+      <div className="absolute inset-0 mindtip-starfield" />
 
       <p className="relative z-10 font-sans text-[13px] tracking-[0.08em] text-white/80">MindTip</p>
 
@@ -221,80 +229,94 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
           {greeting()}{name} — who's hearing you out today?
         </h1>
 
-        {/* Orb + four intentions orbiting it, in place of a grid of buttons.
-            Same underlying selection state as before (setSelected/onStart) —
-            only the presentation changed. */}
-        <svg viewBox="0 0 300 300" className="w-full max-w-[280px] mb-4">
-          {/* Slow-rotating orbit path — purely decorative */}
-          <circle
-            cx={ORB_X} cy={ORB_Y} r="100" fill="none" stroke="#FFFFFF" strokeWidth="1"
-            opacity="0.18" strokeDasharray="2 6" className="mindtip-home-ring-spin"
-            style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+        {/* The portrait art and the label/selection SVG are stacked in one
+            shared box, using the image's own native pixel size as the SVG
+            viewBox. That means both layers always scale together at
+            identical proportions — a label can't end up over the wrong
+            portrait the way it could when the image was a separately
+            positioned full-page background and the labels lived in an
+            unrelated abstract coordinate space. */}
+        <div className="relative w-full max-w-[280px] mb-4" style={{ aspectRatio: `${RING_VIEWBOX_W} / ${RING_VIEWBOX_H}` }}>
+          <img
+            src="/images/mindtip-home-ring.jpg"
+            alt=""
+            className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none rounded-full"
           />
-
-          {/* Connecting line from the selected planet to the orb — same
-              visual language as the constellation screens' star-to-orb lines */}
-          {activeCharacter && (
-            <line
-              x1={activeCharacter.x} y1={activeCharacter.y} x2={ORB_X} y2={ORB_Y}
-              stroke={activeCharacter.planetColor} strokeWidth="1.8" opacity="0.85"
+          <svg viewBox={`0 0 ${RING_VIEWBOX_W} ${RING_VIEWBOX_H}`} className="absolute inset-0 w-full h-full">
+            {/* Slow-rotating orbit path — purely decorative, echoes the
+                dashed arcs already painted into the portrait art */}
+            <circle
+              cx={ORB_X} cy={ORB_Y} r="265" fill="none" stroke="#FFFFFF" strokeWidth="1"
+              opacity="0.14" strokeDasharray="2 6" className="mindtip-home-ring-spin"
+              style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
             />
-          )}
 
-          {CHARACTERS.map((character, i) => (
-            <g
-              key={character.key}
-              onClick={() => handleSelectCharacter(character)}
-              style={{
-                cursor: 'pointer',
-                transformBox: 'fill-box',
-                transformOrigin: 'center',
-                animation: 'mindtip-planet-in 1.1s cubic-bezier(0.34,1.56,0.64,1) forwards',
-                animationDelay: `${i * 0.22}s`,
-                opacity: 0
-              }}
-            >
-              <circle cx={character.x} cy={character.y} r="26" fill="transparent" />
-              <text
-                x={character.x}
-                y={character.y + character.labelDy}
-                textAnchor="middle"
-                fontSize={selected === character.key ? 14 : 13}
-                fontWeight={selected === character.key ? 700 : 400}
-                fill={selected === character.key ? character.planetColor : '#F5F5FA'}
+            {/* Connecting line from the selected planet to the orb — same
+                visual language as the constellation screens' star-to-orb lines */}
+            {activeCharacter && (
+              <line
+                x1={activeCharacter.x} y1={activeCharacter.y} x2={ORB_X} y2={ORB_Y}
+                stroke={activeCharacter.planetColor} strokeWidth="2.4" opacity="0.85"
+              />
+            )}
+
+            {CHARACTERS.map((character, i) => (
+              <g
+                key={character.key}
+                onClick={() => handleSelectCharacter(character)}
                 style={{
-                  transition: 'font-size 0.3s cubic-bezier(0.34,1.56,0.64,1), fill 0.3s',
-                  filter: selected === character.key ? `drop-shadow(0 0 6px ${character.planetColor})` : 'none'
+                  cursor: 'pointer',
+                  transformBox: 'fill-box',
+                  transformOrigin: 'center',
+                  animation: 'mindtip-planet-in 1.1s cubic-bezier(0.34,1.56,0.64,1) forwards',
+                  animationDelay: `${i * 0.22}s`,
+                  opacity: 0
                 }}
               >
-                {character.label}
-              </text>
+                <circle cx={character.x} cy={character.y} r="83" fill="transparent" />
+                <text
+                  x={character.x}
+                  y={character.y + character.labelDy}
+                  textAnchor="middle"
+                  fontSize={selected === character.key ? 20 : 18}
+                  fontWeight={selected === character.key ? 700 : 400}
+                  fill={selected === character.key ? character.planetColor : '#F5F5FA'}
+                  style={{
+                    transition: 'font-size 0.3s cubic-bezier(0.34,1.56,0.64,1), fill 0.3s',
+                    filter: selected === character.key ? `drop-shadow(0 0 6px ${character.planetColor})` : 'none'
+                  }}
+                >
+                  {character.label}
+                </text>
+              </g>
+            ))}
+
+            {/* Soft, continuous, transparent gas aura — sits inset within
+                the baked-in nebula sphere so the two layer together rather
+                than fighting each other; no moving parts */}
+            <circle cx={ORB_X} cy={ORB_Y} r="90" fill="url(#homeAura)" />
+
+            {/* The living orb — gentle continuous breathing, color shifts to
+                match the selected character (orbFrom/orbTo, unchanged logic) */}
+            <g className="mindtip-home-orb-breathe" style={{ transformBox: 'fill-box', transformOrigin: 'center' }}>
+              <circle cx={ORB_X} cy={ORB_Y} r="55" fill="url(#homeOrbGradient)" />
+              <ellipse cx={ORB_X - 14} cy={ORB_Y - 16} rx="12" ry="9" fill="#FFFFFF" opacity="0.65" />
             </g>
-          ))}
 
-          {/* Soft, continuous, transparent gas aura — no moving parts */}
-          <circle cx={ORB_X} cy={ORB_Y} r="50" fill="url(#homeAura)" />
-
-          {/* The living orb — gentle continuous breathing, color shifts to
-              match the selected intention (orbFrom/orbTo, unchanged logic) */}
-          <g className="mindtip-home-orb-breathe" style={{ transformBox: 'fill-box', transformOrigin: 'center' }}>
-            <circle cx={ORB_X} cy={ORB_Y} r="30" fill="url(#homeOrbGradient)" />
-            <ellipse cx={ORB_X - 10} cy={ORB_Y - 12} rx="7" ry="5" fill="#FFFFFF" opacity="0.65" />
-          </g>
-
-          <defs>
-            <radialGradient id="homeOrbGradient" cx="35%" cy="30%" r="75%">
-              <stop offset="0%" stopColor="#EDE7FA" />
-              <stop offset="45%" stopColor={orbFrom} />
-              <stop offset="100%" stopColor={orbTo} />
-            </radialGradient>
-            <radialGradient id="homeAura" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor={orbFrom} stopOpacity="0.4" />
-              <stop offset="60%" stopColor={orbFrom} stopOpacity="0.14" />
-              <stop offset="100%" stopColor={orbFrom} stopOpacity="0" />
-            </radialGradient>
-          </defs>
-        </svg>
+            <defs>
+              <radialGradient id="homeOrbGradient" cx="35%" cy="30%" r="75%">
+                <stop offset="0%" stopColor="#EDE7FA" />
+                <stop offset="45%" stopColor={orbFrom} />
+                <stop offset="100%" stopColor={orbTo} />
+              </radialGradient>
+              <radialGradient id="homeAura" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor={orbFrom} stopOpacity="0.4" />
+                <stop offset="60%" stopColor={orbFrom} stopOpacity="0.14" />
+                <stop offset="100%" stopColor={orbFrom} stopOpacity="0" />
+              </radialGradient>
+            </defs>
+          </svg>
+        </div>
 
         <form
           onSubmit={e => {
