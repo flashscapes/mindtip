@@ -1,5 +1,5 @@
 // TEMPORARY diagnostic route — see prior voice searches for context.
-// Removed again once a survivalist voice is chosen.
+// Removed again once voices are chosen for astronaut and infantry.
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
