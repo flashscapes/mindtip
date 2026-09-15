@@ -71,6 +71,7 @@ function iceClipPathFor(messageId: string): string {
 export function ChatBubble({
   message,
   fontFamily,
+  fontWeight,
   textColor,
   bubbles,
   staggerOffset = 0,
@@ -79,6 +80,7 @@ export function ChatBubble({
 }: {
   message: Message
   fontFamily?: string
+  fontWeight?: number | string
   textColor?: string
   bubbles?: BubbleTheme
   staggerOffset?: number
@@ -90,8 +92,11 @@ export function ChatBubble({
   if (bubbles) {
     const isIce = bubbles.shape === 'ice'
     const isHud = bubbles.shape === 'hud'
+    const isPlain = !isIce && !isHud
     const clipPath = isIce ? iceClipPathFor(message.id) : undefined
     const hudBorder = isUser ? bubbles.userBorder : bubbles.assistantBorder
+    const plainRadius = bubbles.borderRadius ?? 16
+    const plainTailRadius = bubbles.tailRadius ?? 4
     return (
       <div className={`flex items-end gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
         {!isUser && <FedoraIcon color={bubbles.timestampColor} />}
@@ -100,13 +105,19 @@ export function ChatBubble({
           style={isUser ? { marginRight: staggerOffset } : { marginLeft: staggerOffset }}
         >
           <div
-            className={isIce || isHud ? 'text-[15px] leading-relaxed relative' : 'rounded-2xl px-4 py-3 text-[15px] leading-relaxed'}
+            className={isIce || isHud ? 'text-[15px] leading-relaxed relative' : 'px-4 py-3 text-[15px] leading-relaxed'}
             style={{
               background: isUser ? bubbles.userBg : bubbles.assistantBg,
               color: isUser ? bubbles.userText : bubbles.assistantText,
               fontFamily,
-              borderBottomRightRadius: !isIce && !isHud && isUser ? 4 : undefined,
-              borderBottomLeftRadius: !isIce && !isHud && !isUser ? 4 : undefined,
+              fontWeight,
+              ...(isPlain
+                ? {
+                    borderRadius: plainRadius,
+                    borderBottomRightRadius: isUser ? plainTailRadius : undefined,
+                    borderBottomLeftRadius: !isUser ? plainTailRadius : undefined
+                  }
+                : {}),
               ...(isIce
                 ? {
                     clipPath,
@@ -168,7 +179,7 @@ export function ChatBubble({
     <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
       <p
         className={`max-w-[85%] text-[16px] leading-relaxed ${isUser ? 'italic text-right' : ''} ${textColor ? '' : isUser ? 'text-mist' : 'text-ivory'}`}
-        style={{ ...(fontFamily ? { fontFamily } : {}), ...(textColor ? { color: textColor, opacity: isUser ? 0.75 : 1 } : {}) }}
+        style={{ ...(fontFamily ? { fontFamily } : {}), fontWeight, ...(textColor ? { color: textColor, opacity: isUser ? 0.75 : 1 } : {}) }}
       >
         {message.content}
       </p>

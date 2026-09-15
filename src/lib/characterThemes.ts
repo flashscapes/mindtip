@@ -16,6 +16,11 @@ export interface BubbleTheme {
   shape?: 'ice' | 'hud'
   assistantBorder?: string
   userBorder?: string
+  // Only used by the plain rounded-rect shape (shape unset) -- lets a
+  // theme use sharper corners than the 16px/4px default without needing
+  // a whole new shape variant. Undefined keeps the existing look exactly.
+  borderRadius?: number
+  tailRadius?: number
 }
 
 // For themes that render as plain text rather than bubbles (see the
@@ -28,6 +33,7 @@ export interface InkColors {
 
 export interface CharacterTheme {
   font: string
+  fontWeight?: number | string
   background?: string
   textColor?: string
   placeholderColor?: string
@@ -84,20 +90,22 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
     lineHeight: 28
   },
   infantry: {
-    font: "'Black Ops One', sans-serif",
+    font: "'Big Shoulders Stencil Text', sans-serif",
+    fontWeight: 700,
     background:
-      'radial-gradient(ellipse at 60% 20%, rgba(255,200,120,0.14), transparent 45%), ' +
-      'linear-gradient(180deg, #2E3524 0%, #4A5638 45%, #6B7350 75%, #8A8560 100%)',
+      'linear-gradient(180deg, #232A1B 0%, #3A4128 30%, #6B6538 55%, #A88A52 75%, #C9A868 100%)',
     textColor: '#E8E4D0',
     placeholderColor: 'rgba(232,228,208,0.4)',
     accentColor: '#B8C89A',
     atmosphere: 'camp',
     bubbles: {
-      assistantBg: 'linear-gradient(160deg, #4A5638, #2E3524)',
+      assistantBg: 'linear-gradient(160deg, #4A5638, #2A3320)',
       assistantText: '#E8E4D0',
-      userBg: 'linear-gradient(160deg, #8A9A6E, #5C6B44)',
-      userText: '#F5F5E8',
-      timestampColor: 'rgba(184,200,154,0.75)'
+      userBg: 'linear-gradient(160deg, #A8985E, #7A6A3E)',
+      userText: '#1C2116',
+      timestampColor: 'rgba(184,200,154,0.75)',
+      borderRadius: 8,
+      tailRadius: 2
     }
   },
   survivalist: {

@@ -343,6 +343,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
             key={m.id}
             message={m}
             fontFamily={theme?.font}
+            fontWeight={theme?.fontWeight}
             textColor={theme?.textColor}
             bubbles={theme?.bubbles}
             staggerOffset={theme?.bubbles ? staggerFor(m.id) : 0}
@@ -374,6 +375,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
             borderBottom: `1px solid ${theme?.accentColor ? theme.accentColor + '4D' : 'rgba(37,56,58,0.14)'}`,
             color: theme?.textColor,
             fontFamily: theme?.font,
+            fontWeight: theme?.fontWeight,
             ['--mindtip-placeholder-color' as string]: theme?.placeholderColor
           }}
         />
