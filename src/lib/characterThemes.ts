@@ -29,7 +29,7 @@ export interface CharacterTheme {
   textColor?: string
   placeholderColor?: string
   accentColor?: string
-  atmosphere?: 'noir' | 'gotham' | 'study' | 'arctic'
+  atmosphere?: 'noir' | 'gotham' | 'study' | 'arctic' | 'camp'
   bubbles?: BubbleTheme
   inkColors?: InkColors
   lineHeight?: number
@@ -80,7 +80,23 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
     inkColors: { assistant: '#3A2E14', user: '#1E3A6E' },
     lineHeight: 28
   },
-  comedian: { font: "'Permanent Marker', cursive" },
+  infantry: {
+    font: "'Black Ops One', sans-serif",
+    background:
+      'radial-gradient(ellipse at 60% 20%, rgba(255,200,120,0.14), transparent 45%), ' +
+      'linear-gradient(180deg, #2E3524 0%, #4A5638 45%, #6B7350 75%, #8A8560 100%)',
+    textColor: '#E8E4D0',
+    placeholderColor: 'rgba(232,228,208,0.4)',
+    accentColor: '#B8C89A',
+    atmosphere: 'camp',
+    bubbles: {
+      assistantBg: 'linear-gradient(160deg, #4A5638, #2E3524)',
+      assistantText: '#E8E4D0',
+      userBg: 'linear-gradient(160deg, #8A9A6E, #5C6B44)',
+      userText: '#F5F5E8',
+      timestampColor: 'rgba(184,200,154,0.75)'
+    }
+  },
   survivalist: {
     font: "'Oswald', sans-serif",
     background:

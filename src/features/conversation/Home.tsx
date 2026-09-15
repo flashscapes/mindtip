@@ -51,12 +51,12 @@ const CHARACTERS = [
     x: 475, y: 560, labelDy: -100
   },
   {
-    key: 'comedian',
-    label: 'Irreverent Comedian',
+    key: 'infantry',
+    label: 'Frontline Infantry Man',
     seed: NEUTRAL_SEED,
-    personaPrompt: "Speak like a sharp, irreverent stand-up comedian: quick, observational, cuts through self-seriousness with humor, but underneath the jokes is real insight — comedians often see uncomfortable truths clearly precisely because they're willing to say them out loud. Never mean-spirited, always a little playful.",
-    colors: ['#F0A868', '#7A4A18'],
-    planetColor: '#F5C088',
+    personaPrompt: "Speak like a frontline infantry soldier: direct, disciplined, no wasted words, steady under pressure. Draws on the mindset of duty, teamwork, and doing the next right thing when things are hard — not tactics or combat details, just the outlook. Blunt but never cold; looks out for people the way a squad looks out for its own. Values readiness over worry, and action over dwelling.",
+    colors: ['#8A9A6E', '#3E4A2E'],
+    planetColor: '#B8C89A',
     x: 98, y: 560, labelDy: -100
   },
   {
