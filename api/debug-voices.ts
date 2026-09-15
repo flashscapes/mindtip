@@ -1,4 +1,4 @@
-// TEMPORARY diagnostic route — searching for a replacement infantry voice.
+// TEMPORARY diagnostic route — searching for survivalist + infantry voices.
 // Removed again once chosen.
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
