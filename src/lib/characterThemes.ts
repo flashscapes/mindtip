@@ -10,9 +10,12 @@ export interface BubbleTheme {
   userBg: string
   userText: string
   timestampColor: string
-  // 'ice' clips the bubble into a jagged, icicle-fringed silhouette
-  // instead of the normal rounded rectangle -- see ChatBubble.tsx.
-  shape?: 'ice'
+  // 'ice' clips the bubble into a jagged, icicle-fringed silhouette;
+  // 'hud' gives it a sharp bordered panel with small corner brackets,
+  // like a heads-up-display readout. See ChatBubble.tsx.
+  shape?: 'ice' | 'hud'
+  assistantBorder?: string
+  userBorder?: string
 }
 
 // For themes that render as plain text rather than bubbles (see the
@@ -29,7 +32,7 @@ export interface CharacterTheme {
   textColor?: string
   placeholderColor?: string
   accentColor?: string
-  atmosphere?: 'noir' | 'gotham' | 'study' | 'arctic' | 'camp'
+  atmosphere?: 'noir' | 'gotham' | 'study' | 'arctic' | 'camp' | 'orbit'
   bubbles?: BubbleTheme
   inkColors?: InkColors
   lineHeight?: number
@@ -115,5 +118,24 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
       shape: 'ice'
     }
   },
-  astronaut: { font: "'Orbitron', sans-serif" }
+  astronaut: {
+    font: "'Orbitron', sans-serif",
+    background:
+      'radial-gradient(ellipse at 28% 22%, rgba(61,42,107,0.5), transparent 55%), ' +
+      'radial-gradient(ellipse at 85% 30%, rgba(31,107,117,0.3), transparent 35%), #02030A',
+    textColor: '#CFF5F8',
+    placeholderColor: 'rgba(207,245,248,0.4)',
+    accentColor: '#6DD8E0',
+    atmosphere: 'orbit',
+    bubbles: {
+      assistantBg: 'rgba(10,30,40,0.55)',
+      assistantText: '#CFF5F8',
+      userBg: 'rgba(109,216,224,0.16)',
+      userText: '#EAFBFC',
+      timestampColor: 'rgba(109,216,224,0.7)',
+      assistantBorder: 'rgba(109,216,224,0.55)',
+      userBorder: 'rgba(109,216,224,0.4)',
+      shape: 'hud'
+    }
+  }
 }

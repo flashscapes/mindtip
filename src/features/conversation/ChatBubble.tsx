@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { Message } from '@/types'
 import type { BubbleTheme, InkColors } from '@/lib/characterThemes'
 import { TipCard } from './TipCard'
@@ -8,6 +9,28 @@ function formatTime(iso: string): string {
   } catch {
     return ''
   }
+}
+
+// Mission-clock style timestamp for the Astronaut's HUD bubbles.
+function formatHudTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString('en-GB', { hour12: false, timeZone: 'UTC' }) + ' UTC'
+  } catch {
+    return ''
+  }
+}
+
+// Small L-shaped corner accent for HUD-style bubbles (see
+// BubbleTheme.shape === 'hud') — one at the top-left, one mirrored at the
+// bottom-right, echoing a viewfinder/targeting-panel readout.
+function CornerBracket({ color, corner }: { color: string; corner: 'tl' | 'br' }) {
+  const style: CSSProperties =
+    corner === 'tl' ? { top: -1, left: -1 } : { bottom: -1, right: -1, transform: 'rotate(180deg)' }
+  return (
+    <svg width="10" height="10" style={{ position: 'absolute', ...style }}>
+      <path d="M0 10 L0 0 L10 0" stroke={color} strokeWidth="1.5" fill="none" />
+    </svg>
+  )
 }
 
 // Tiny fedora glyph — same silhouette used elsewhere in noir's theming, at
@@ -66,7 +89,9 @@ export function ChatBubble({
 
   if (bubbles) {
     const isIce = bubbles.shape === 'ice'
+    const isHud = bubbles.shape === 'hud'
     const clipPath = isIce ? iceClipPathFor(message.id) : undefined
+    const hudBorder = isUser ? bubbles.userBorder : bubbles.assistantBorder
     return (
       <div className={`flex items-end gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
         {!isUser && <FedoraIcon color={bubbles.timestampColor} />}
@@ -75,13 +100,13 @@ export function ChatBubble({
           style={isUser ? { marginRight: staggerOffset } : { marginLeft: staggerOffset }}
         >
           <div
-            className={isIce ? 'text-[15px] leading-relaxed' : 'rounded-2xl px-4 py-3 text-[15px] leading-relaxed'}
+            className={isIce || isHud ? 'text-[15px] leading-relaxed relative' : 'rounded-2xl px-4 py-3 text-[15px] leading-relaxed'}
             style={{
               background: isUser ? bubbles.userBg : bubbles.assistantBg,
               color: isUser ? bubbles.userText : bubbles.assistantText,
               fontFamily,
-              borderBottomRightRadius: !isIce && isUser ? 4 : undefined,
-              borderBottomLeftRadius: !isIce && !isUser ? 4 : undefined,
+              borderBottomRightRadius: !isIce && !isHud && isUser ? 4 : undefined,
+              borderBottomLeftRadius: !isIce && !isHud && !isUser ? 4 : undefined,
               ...(isIce
                 ? {
                     clipPath,
@@ -91,16 +116,27 @@ export function ChatBubble({
                     WebkitBackdropFilter: 'blur(10px)',
                     filter: 'drop-shadow(2px 4px 5px rgba(0,10,20,0.35))'
                   }
-                : { padding: undefined })
+                : {}),
+              ...(isHud
+                ? {
+                    padding: '11px 13px',
+                    borderRadius: 4,
+                    border: `1px solid ${hudBorder}`,
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)'
+                  }
+                : {})
             }}
           >
+            {isHud && hudBorder && <CornerBracket color={hudBorder} corner="tl" />}
             {message.content}
+            {isHud && hudBorder && <CornerBracket color={hudBorder} corner="br" />}
           </div>
           <p
             className={`text-[11px] mt-1 flex items-center gap-1 ${isUser ? 'justify-end' : 'justify-start'}`}
-            style={{ color: bubbles.timestampColor, fontFamily }}
+            style={{ color: bubbles.timestampColor, fontFamily, letterSpacing: isHud ? '0.04em' : undefined }}
           >
-            {formatTime(message.createdAt)}
+            {isHud ? formatHudTime(message.createdAt) : formatTime(message.createdAt)}
             {isUser && <span aria-hidden="true">✓</span>}
           </p>
           {message.tip && <TipCard tip={message.tip} />}
