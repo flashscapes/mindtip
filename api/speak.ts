@@ -34,6 +34,16 @@ const CARTESIA_VOICES: Record<string, CartesiaVoiceConfig> = {
     voiceId: 'dbfa416f-d5c3-4006-854b-235ef6bdf4fd', // Damon - Commanding Narrator: "deep and serious... steady gravitas"
     speed: 0.92,
     emotion: 'determined'
+  },
+  astronaut: {
+    voiceId: 'aa2cafe9-97ba-4052-ac3c-875000f95212', // Zander - Composed Advisor: "measured and calm presence"
+    speed: 0.97,
+    emotion: 'contemplative'
+  },
+  infantry: {
+    voiceId: '8c254787-4eb4-4577-bd3d-fb3c273baea2', // Rowan - Steady Guide: "reliable and steady... clarity and trust"
+    speed: 1.0,
+    emotion: 'determined'
   }
 };
 
