@@ -41,8 +41,13 @@ const CARTESIA_VOICES: Record<string, CartesiaVoiceConfig> = {
     emotion: 'contemplative'
   },
   infantry: {
-    voiceId: '8c254787-4eb4-4577-bd3d-fb3c273baea2', // Rowan - Steady Guide: "reliable and steady... clarity and trust"
-    speed: 1.0,
+    voiceId: '87286a8d-7ea7-4235-a41a-dd9fa6630feb', // Henry - Plainspoken Guy: "youthful... monotone, matter-of-fact attitude"
+    speed: 1.02,
+    emotion: 'determined'
+  },
+  survivalist: {
+    voiceId: 'db69127a-dbaf-4fa9-b425-2fe67680c348', // Clint - Rugged Actor: "raspy voice with rugged tone"
+    speed: 0.95,
     emotion: 'determined'
   }
 };
