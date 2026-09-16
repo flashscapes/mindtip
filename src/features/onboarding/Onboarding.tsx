@@ -213,7 +213,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
         {step === 1 && (
           <div>
-            <h1 className="font-display font-light text-[26px] leading-snug text-ivory mb-1">Let's map your inner sky.</h1>
+            <h1
+              className="text-[28px] leading-snug text-ivory mb-1"
+              style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.04em', textShadow: '0 2px 12px rgba(0,0,0,0.4)' }}
+            >
+              Let's map your inner sky.
+            </h1>
             <p className="text-mist text-[13px] mb-4">Tap what weighs on you.</p>
             <div className="-mx-5">
               <ConstellationField
@@ -227,7 +232,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
         {step === 2 && (
           <div>
-            <h1 className="font-display font-light text-[26px] leading-snug text-ivory mb-1">What lights your way?</h1>
+            <h1
+              className="text-[28px] leading-snug text-ivory mb-1"
+              style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.04em', textShadow: '0 2px 12px rgba(0,0,0,0.4)' }}
+            >
+              What lights your way?
+            </h1>
             <p className="text-mist text-[13px] mb-4">Tap what's helped before.</p>
             <div className="-mx-5">
               <ConstellationField
