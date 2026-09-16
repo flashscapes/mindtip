@@ -12,6 +12,13 @@ export interface AIContext {
   currentMessage: string
   /** Set for the whole conversation once a character is chosen on Home — see buildContext.ts for how this gets woven into the prompt. */
   character?: Character
+  /** True for exactly one call: generating the natural check-in when a
+   *  person reopens a conversation with prior history (see
+   *  ConversationStore.ts and Conversation.tsx's initiateReentry). When
+   *  true, recentMessages holds the actual prior transcript and
+   *  currentMessage is empty -- the model is asked to open with a
+   *  grounded check-in instead of replying to anything. */
+  isReentry?: boolean
 }
 
 export interface AIResponse {

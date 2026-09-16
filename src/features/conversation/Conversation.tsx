@@ -9,6 +9,7 @@ import { useVoiceConversation } from '@/voice'
 import { ChatBubble } from './ChatBubble'
 import { Button } from '@/components/ui/Button'
 import { STORAGE_KEYS } from '@/lib/constants'
+import { getConversationRecord, saveConversationRecord } from '@/services/conversation/ConversationStore'
 import { CHARACTER_THEMES } from '@/lib/characterThemes'
 import { NoirSkyline } from './NoirSkyline'
 import { GothamSkyline } from './GothamSkyline'
@@ -23,6 +24,12 @@ interface ConversationProps {
   // Lets a conversation resume with prior history intact (e.g. "Continue
   // talking" after a Reflection) instead of always starting empty.
   seedMessages?: Message[]
+  // Set when App.tsx finds a saved conversation record for the chosen
+  // character (see ConversationStore.ts). The actual prior transcript --
+  // fed to the AI as history but never rendered on screen. Its presence
+  // (rather than seedMessages/initialMessage) is what triggers a natural
+  // check-in on mount instead of the generic first message.
+  reentryContext?: Message[]
   // When true, hands-free voice is enabled before the first message is
   // sent — used when the user arrives here via the Home mood check-in,
   // which already unlocked audio playback during its own tap.
@@ -39,11 +46,19 @@ interface ConversationProps {
   onExit: () => void
 }
 
-export function Conversation({ profile, initialMessage, seedMessages, autoEnableVoice, character, onReflectionReady, onExit }: ConversationProps) {
+export function Conversation({ profile, initialMessage, seedMessages, reentryContext, autoEnableVoice, character, onReflectionReady, onExit }: ConversationProps) {
   const ai = useMemo(() => createAIProvider(), [])
   const memory = useMemo(() => new LocalMemoryService(), [])
   const memoryExtractor = useMemo(() => createMemoryExtractor(), [])
   const safety = useMemo(() => new SafetyService(), [])
+  // The character's key already is the conversation id in this app's model
+  // (see ConversationStore.ts) -- 'default' covers the character-less flow.
+  const conversationId = character?.key ?? 'default'
+  // The actual prior transcript on a re-entry, kept out of the visible
+  // `messages` state entirely (never rendered) but always prepended to
+  // what's sent to the AI as history -- see send() and initiateReentry()
+  // below. Empty for a brand-new conversation.
+  const hiddenPriorMessagesRef = useRef<Message[]>(reentryContext ?? [])
 
   const [messages, setMessages] = useState<Message[]>(seedMessages ?? [])
   // Mirrors `messages` synchronously. The voice loop can end up re-invoking
@@ -91,6 +106,15 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
   // deliberately (see App.tsx's onExit), never on a reload.
   useEffect(() => {
     sessionStorage.setItem(STORAGE_KEYS.conversation, JSON.stringify(messages))
+
+    // Separately, the durable per-character record used for true re-entry
+    // (see ConversationStore.ts) — this one is deliberately NOT cleared on
+    // exit, and holds the FULL history (whatever was already there from a
+    // prior sitting, plus this session's messages), not just what's
+    // currently visible on screen.
+    if (messages.length > 0) {
+      saveConversationRecord(conversationId, [...hiddenPriorMessagesRef.current, ...messages])
+    }
   }, [messages])
 
   if (import.meta.env.DEV) {
@@ -173,7 +197,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
           profile,
           character,
           relevantMemories,
-          recentMessages: messagesRef.current,
+          recentMessages: [...hiddenPriorMessagesRef.current, ...messagesRef.current],
           currentMessage: trimmed
         },
         handleChunk
@@ -264,6 +288,79 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     )
   }
 
+  // Fires once on mount instead of send() when reentryContext is present
+  // (see App.tsx's handleStartConversation and ConversationStore.ts) — the
+  // person is reopening a conversation that has real prior history. Rather
+  // than replaying that history or sending the generic first message, this
+  // asks the model for one grounded check-in based on it, and adds ONLY
+  // that reply to the visible conversation -- no corresponding user-visible
+  // message is ever added for this turn, since there wasn't one.
+  const initiateReentry = async () => {
+    setIsThinking(true)
+    isGeneratingRef.current = true
+
+    const assistantMessageId = crypto.randomUUID()
+    let streamedMessageCreated = false
+    const handleChunk = (textSoFar: string) => {
+      if (!streamedMessageCreated) {
+        streamedMessageCreated = true
+        setIsThinking(false)
+        setMessagesAndRef(prev => [
+          ...prev,
+          { id: assistantMessageId, role: 'assistant', content: textSoFar, createdAt: new Date().toISOString() }
+        ])
+      } else {
+        setMessagesAndRef(prev => prev.map(m => (m.id === assistantMessageId ? { ...m, content: textSoFar } : m)))
+      }
+    }
+
+    try {
+      const response = await ai.generateResponse(
+        {
+          profile,
+          character,
+          relevantMemories: [],
+          recentMessages: hiddenPriorMessagesRef.current,
+          currentMessage: '',
+          isReentry: true
+        },
+        handleChunk
+      )
+
+      if (streamedMessageCreated) {
+        setMessagesAndRef(prev => prev.map(m => (m.id === assistantMessageId ? { ...m, content: response.replyText } : m)))
+      } else {
+        setMessagesAndRef(prev => [
+          ...prev,
+          { id: assistantMessageId, role: 'assistant', content: response.replyText, createdAt: new Date().toISOString() }
+        ])
+      }
+      void voice.speakResponse(response.replyText, character?.key)
+    } catch (err) {
+      console.error('Re-entry check-in generation failed:', err)
+      const partial = err instanceof StreamingResponseError ? err.partialText : undefined
+      if (streamedMessageCreated && partial) {
+        setMessagesAndRef(prev => prev.map(m => (m.id === assistantMessageId ? { ...m, content: partial, truncated: true } : m)))
+      } else if (!streamedMessageCreated) {
+        // Fall back to a plain, honest opener rather than leaving the
+        // screen blank — the person still sees something waiting for them.
+        setMessagesAndRef(prev => [
+          ...prev,
+          {
+            id: assistantMessageId,
+            role: 'assistant',
+            content: "Good to have you back — pick up wherever feels right.",
+            createdAt: new Date().toISOString()
+          }
+        ])
+      }
+      if (voice.enabled) voice.startListening()
+    }
+
+    setIsThinking(false)
+    isGeneratingRef.current = false
+  }
+
   const voice = useVoiceConversation({ onUserSpeech: send })
 
   /**
@@ -330,7 +427,9 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
           console.error('Could not enable hands-free voice automatically:', err)
         }
       }
-      if (initialMessage) {
+      if (reentryContext && reentryContext.length > 0) {
+        void initiateReentry()
+      } else if (initialMessage) {
         void send(initialMessage)
       } else if (autoEnableVoice) {
         // No initial message means nothing will trigger the usual

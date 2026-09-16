@@ -35,7 +35,7 @@ export async function generateWithGemini(context: AIContext): Promise<AIResponse
     MINDTIP_SYSTEM_PROMPT,
     DEFAULT_RESPONSE_FORMAT_INSTRUCTIONS,
     buildUserContextBlock(context),
-    `CURRENT MESSAGE\n${context.currentMessage}`
+    buildCurrentMessageBlock(context)
   ].join('\n\n')
 
   const result = await model.generateContent(prompt)
@@ -71,6 +71,21 @@ export async function generateWithGemini(context: AIContext): Promise<AIResponse
 const CHARACTER_PLAIN_TEXT_INSTRUCTIONS = `
 Respond with ONLY the character's reply as plain text — no JSON, no markdown fencing, no labels, no meta-commentary, nothing but the words the character actually says. There is no separate tip field in this conversation — a structured tip card popping up mid-conversation would break the character entirely. If you have an actionable suggestion, say it in the character's own voice as part of the reply itself.`
 
+// Builds the block that goes at the very end of the prompt, after the
+// RECENT CONVERSATION history from buildUserContextBlock. Normally that's
+// just the person's current message. For a re-entry (see AIContext.isReentry
+// and ConversationStore.ts), there is no current message at all -- the
+// RECENT CONVERSATION block already holds the actual prior transcript, and
+// this asks the model to open with a real check-in grounded in it, rather
+// than replying to anything or summarizing the conversation back to them.
+function buildCurrentMessageBlock(context: AIContext): string {
+  if (context.isReentry) {
+    return `RE-ENTRY MOMENT
+The person just reopened this conversation after being away for a while. The conversation above is real prior history with them, not a summary — use it. Do not replay, recap, or summarize it back to them. Generate ONE brief, warm, natural check-in grounded in a specific detail from that history — the way you'd actually greet someone you were mid-conversation with — then stop and wait for their reply.`
+  }
+  return `CURRENT MESSAGE\n${context.currentMessage}`
+}
+
 /**
  * Streams a character conversation's reply directly onto an already-open
  * Express response as plain text chunks, and returns the fully assembled
@@ -89,7 +104,7 @@ export async function streamCharacterResponseWithGemini(context: AIContext, res:
     MINDTIP_SYSTEM_PROMPT,
     CHARACTER_PLAIN_TEXT_INSTRUCTIONS,
     buildUserContextBlock(context),
-    `CURRENT MESSAGE\n${context.currentMessage}`
+    buildCurrentMessageBlock(context)
   ].join('\n\n')
 
   const result = await model.generateContentStream(prompt)
