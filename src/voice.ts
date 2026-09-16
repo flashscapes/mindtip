@@ -8,7 +8,7 @@
 //                              speak -> auto-listen -> transcribe ->
 //                              hand text back to your app -> repeat
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // ---------- Text-to-speech ----------
 
@@ -381,6 +381,22 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     },
     [startListening]
   );
+
+  // Safety net: this hook has no other tie to the component's lifecycle, so
+  // without this, exiting a conversation (or any other unmount) leaves the
+  // mic stream, AudioContext, and requestAnimationFrame monitor loop from
+  // this instance running in the browser indefinitely -- raw browser APIs
+  // like these don't stop just because the React component that created
+  // them went away. That's exactly what let a second conversation's voice
+  // loop start on top of a first one that was never actually torn down.
+  // handleExit calling disableVoiceConversation() explicitly is the primary
+  // fix; this covers every other way the component could unmount.
+  useEffect(() => {
+    return () => {
+      enabledRef.current = false;
+      vadRef.current?.stop();
+    };
+  }, []);
 
   return { state, enabled, debugLog, enableVoiceConversation, disableVoiceConversation, speakResponse, startListening };
 }

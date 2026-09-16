@@ -238,6 +238,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
   }
 
   const handleExit = () => {
+    voice.disableVoiceConversation()
     void extractMemoriesFromThisConversation()
     onExit()
   }
