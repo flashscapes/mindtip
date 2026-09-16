@@ -73,6 +73,7 @@ export function ChatBubble({
   fontFamily,
   fontWeight,
   textColor,
+  accentColor,
   bubbles,
   staggerOffset = 0,
   inkColors,
@@ -82,6 +83,7 @@ export function ChatBubble({
   fontFamily?: string
   fontWeight?: number | string
   textColor?: string
+  accentColor?: string
   bubbles?: BubbleTheme
   staggerOffset?: number
   inkColors?: InkColors
@@ -150,7 +152,9 @@ export function ChatBubble({
             {isHud ? formatHudTime(message.createdAt) : formatTime(message.createdAt)}
             {isUser && <span aria-hidden="true">✓</span>}
           </p>
-          {message.tip && <TipCard tip={message.tip} />}
+          {message.tip && (
+            <TipCard tip={message.tip} textColor={bubbles.assistantText} accentColor={accentColor} fontFamily={fontFamily} />
+          )}
         </div>
       </div>
     )
@@ -170,7 +174,9 @@ export function ChatBubble({
         >
           {message.content}
         </p>
-        {message.tip && <TipCard tip={message.tip} />}
+        {message.tip && (
+          <TipCard tip={message.tip} textColor={inkColors.assistant} accentColor={accentColor} fontFamily={fontFamily} />
+        )}
       </div>
     )
   }
@@ -183,7 +189,7 @@ export function ChatBubble({
       >
         {message.content}
       </p>
-      {message.tip && <TipCard tip={message.tip} />}
+      {message.tip && <TipCard tip={message.tip} textColor={textColor} accentColor={accentColor} fontFamily={fontFamily} />}
     </div>
   )
 }

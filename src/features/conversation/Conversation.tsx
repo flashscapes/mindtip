@@ -344,6 +344,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
             message={m}
             fontFamily={theme?.font}
             fontWeight={theme?.fontWeight}
+            accentColor={theme?.accentColor}
             textColor={theme?.textColor}
             bubbles={theme?.bubbles}
             staggerOffset={theme?.bubbles ? staggerFor(m.id) : 0}

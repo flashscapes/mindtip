@@ -206,24 +206,37 @@ class VoiceActivityDetector {
     const durationMs = this.speechStartedAt !== null ? performance.now() - this.speechStartedAt : 0;
     this.opts.onDebug(`Turn finished: ${durationMs.toFixed(0)}ms of speech, ${this.chunks.length} chunk(s) recorded`);
     const recorder = this.recorder;
-    recorder.onstop = () => {
-      const blob = new Blob(this.chunks, { type: 'audio/webm' });
+    const chunks = this.chunks;
+    recorder.onstop = async () => {
+      // Fully release this turn's mic stream and AudioContext before
+      // handing off — onSpeechEnd may itself trigger a fresh listen cycle,
+      // and that next cycle's getUserMedia/AudioContext should never race
+      // against this one still finishing its teardown.
+      await this.teardown();
+      const blob = new Blob(chunks, { type: 'audio/webm' });
       this.opts.onDebug(`Recorded blob: ${blob.size} bytes`);
       this.opts.onSpeechEnd(blob, durationMs);
     };
     recorder.stop();
-    this.teardown();
   }
 
   stop(): void {
-    this.teardown();
+    void this.teardown();
   }
 
-  private teardown(): void {
+  private async teardown(): Promise<void> {
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
     this.rafId = null;
     this.stream?.getTracks().forEach((t) => t.stop());
-    this.audioCtx?.close();
+    // AudioContext.close() is genuinely async — awaiting it (instead of
+    // firing and forgetting) means a fresh AudioContext for the next turn
+    // never gets created before this one has actually finished releasing
+    // its resources, which is a real risk on constrained mobile hardware.
+    try {
+      await this.audioCtx?.close();
+    } catch {
+      // Already closed or never fully opened — nothing to do.
+    }
     this.stream = null;
     this.audioCtx = null;
     this.analyser = null;
@@ -257,7 +270,7 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
   const enabledRef = useRef(false);
   const vadRef = useRef<VoiceActivityDetector | null>(null);
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback((isRetry = false) => {
     if (!enabledRef.current) return;
     setState('listening');
     logDebug('Listening for your voice…');
@@ -314,7 +327,18 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     Promise.race([vad.start(), micTimeout]).catch((err) => {
       logDebug(`Mic access failed: ${err instanceof Error ? err.message : String(err)}`);
       console.error('Mic access failed:', err);
-      setState('idle');
+      // A single automatic retry — a transient mic/AudioContext hiccup
+      // between turns (e.g. the previous turn's resources not fully
+      // released yet) is common enough on mobile that silently stranding
+      // the conversation at idle after one failure is worse than trying
+      // once more. If the retry also fails, give up and surface idle so
+      // at minimum the UI reflects reality rather than looking hung.
+      if (!isRetry && enabledRef.current) {
+        logDebug('Retrying mic access once…');
+        setTimeout(() => startListening(true), 400);
+      } else {
+        setState('idle');
+      }
     });
   }, [onUserSpeech]);
 
