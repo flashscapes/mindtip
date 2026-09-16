@@ -56,6 +56,12 @@ export interface Message {
   createdAt: string
   /** Present when this assistant message is a structured MindTip, not plain chat. */
   tip?: Tip
+  /** True when a streamed reply was cut off partway through -- content holds
+   *  whatever text arrived before the interruption. Rendered as a small,
+   *  clearly-system notice separate from the message text itself, never
+   *  appended into content, so a "cut off" note never reads as something
+   *  the character actually said. */
+  truncated?: boolean
 }
 
 export interface Tip {

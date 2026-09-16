@@ -64,6 +64,18 @@ function iceClipPathFor(messageId: string): string {
   return ICE_CLIP_PATHS[hash % ICE_CLIP_PATHS.length]
 }
 
+// A cut-off reply gets a small, deliberately plain system notice --
+// generic font, muted neutral color, regardless of the active character's
+// theme. This is the app talking, not the character, so it should never
+// look like it belongs to their voice.
+function TruncatedNotice() {
+  return (
+    <p className="font-sans text-[12px] text-mist italic mt-1">
+      Cut off — try sending that again.
+    </p>
+  )
+}
+
 // No bubbles, no fills, by default — the two speakers are distinguished by
 // alignment and a quiet italic on the user's own words, like a transcript
 // rather than a messaging app. Only when a character theme supplies a
@@ -155,6 +167,7 @@ export function ChatBubble({
           {message.tip && (
             <TipCard tip={message.tip} textColor={bubbles.assistantText} accentColor={accentColor} fontFamily={fontFamily} />
           )}
+          {message.truncated && <TruncatedNotice />}
         </div>
       </div>
     )
@@ -177,6 +190,7 @@ export function ChatBubble({
         {message.tip && (
           <TipCard tip={message.tip} textColor={inkColors.assistant} accentColor={accentColor} fontFamily={fontFamily} />
         )}
+        {message.truncated && <TruncatedNotice />}
       </div>
     )
   }
@@ -190,6 +204,7 @@ export function ChatBubble({
         {message.content}
       </p>
       {message.tip && <TipCard tip={message.tip} textColor={textColor} accentColor={accentColor} fontFamily={fontFamily} />}
+      {message.truncated && <TruncatedNotice />}
     </div>
   )
 }

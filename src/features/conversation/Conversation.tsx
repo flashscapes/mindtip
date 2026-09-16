@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Character, Message, UserProfile } from '@/types'
 import { createAIProvider } from '@/services/ai'
+import { StreamingResponseError } from '@/services/ai/AIProvider'
 import { LocalMemoryService } from '@/services/memory/MemoryService'
 import { createMemoryExtractor } from '@/services/memory'
 import { SafetyService } from '@/services/safety/SafetyService'
@@ -61,6 +62,14 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
   }
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
+  // Separate from isThinking on purpose: isThinking now only controls the
+  // "Thinking…" text and clears the moment the first streamed chunk
+  // arrives (once real content is visible, the placeholder text should go
+  // away). This ref blocks re-submission for the *entire* duration of a
+  // response, streaming or not, all the way through to completion or
+  // error — without it, a second message could be sent while the first
+  // one is still streaming in, since isThinking would already read false.
+  const isGeneratingRef = useRef(false)
   // True only in the single turn right after MindTip has verbally
   // suggested Emerging Insights — lets a short spoken "yes" accept that
   // specific suggestion. It is NOT what gates access to the feature; the
@@ -93,7 +102,7 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
 
   const send = async (text: string) => {
     const trimmed = text.trim()
-    if (!trimmed || isThinking) return
+    if (!trimmed || isGeneratingRef.current) return
 
     // A short, clear "yes" right after MindTip verbally suggested Emerging
     // Insights accepts that suggestion — mainly for hands-free voice users
@@ -133,31 +142,85 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     }
 
     setIsThinking(true)
+    isGeneratingRef.current = true
     const relevantMemories = memory.getRelevant(trimmed)
-    let response
+
+    // Character conversations stream in progressively: the assistant
+    // message is created the moment the first chunk lands and updated in
+    // place as more text arrives, instead of appearing all at once after
+    // the full reply is ready. The default (non-character) path never
+    // calls this callback at all, so it behaves exactly as before.
+    const assistantMessageId = crypto.randomUUID()
+    let streamedMessageCreated = false
+
+    const handleChunk = (textSoFar: string) => {
+      if (!streamedMessageCreated) {
+        streamedMessageCreated = true
+        setIsThinking(false)
+        setMessagesAndRef(prev => [
+          ...prev,
+          { id: assistantMessageId, role: 'assistant', content: textSoFar, createdAt: new Date().toISOString() }
+        ])
+      } else {
+        setMessagesAndRef(prev => prev.map(m => (m.id === assistantMessageId ? { ...m, content: textSoFar } : m)))
+      }
+    }
+
+    let response: Awaited<ReturnType<typeof ai.generateResponse>>
     try {
-      response = await ai.generateResponse({
-        profile,
-        character,
-        relevantMemories,
-        recentMessages: messagesRef.current,
-        currentMessage: trimmed
-      })
+      response = await ai.generateResponse(
+        {
+          profile,
+          character,
+          relevantMemories,
+          recentMessages: messagesRef.current,
+          currentMessage: trimmed
+        },
+        handleChunk
+      )
     } catch (err) {
       setIsThinking(false)
       console.error('AI response generation failed:', err)
-      setMessagesAndRef(prev => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: "MindTip hit a snag putting that together. Mind trying again?",
-          createdAt: new Date().toISOString()
-        }
-      ])
+
+      const partial = err instanceof StreamingResponseError ? err.partialText : undefined
+      if (streamedMessageCreated && partial) {
+        // Some of the reply already streamed onto screen — keep it and
+        // mark it cut off with a separate, clearly-system notice, rather
+        // than discarding visible content or writing the notice into the
+        // character's own words.
+        setMessagesAndRef(prev =>
+          prev.map(m => (m.id === assistantMessageId ? { ...m, content: partial, truncated: true } : m))
+        )
+      } else if (streamedMessageCreated) {
+        setMessagesAndRef(prev =>
+          prev.map(m =>
+            m.id === assistantMessageId
+              ? { ...m, content: "MindTip hit a snag putting that together. Mind trying again?" }
+              : m
+          )
+        )
+      } else {
+        setMessagesAndRef(prev => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: "MindTip hit a snag putting that together. Mind trying again?",
+            createdAt: new Date().toISOString()
+          }
+        ])
+      }
+      // Without this, an error mid-voice-conversation leaves the mic
+      // silently off with no way to continue except leaving and starting
+      // over — exactly the kind of "the chat just dies" experience this
+      // whole pass exists to eliminate. If voice was on, let the person
+      // just try again by speaking.
+      if (voice.enabled) voice.startListening()
+      isGeneratingRef.current = false
       return
     }
     setIsThinking(false)
+    isGeneratingRef.current = false
 
     // A one-time, low-stakes verbal courtesy: the moment the conversation
     // first reaches a reasonable depth, mention aloud that Emerging
@@ -169,16 +232,25 @@ export function Conversation({ profile, initialMessage, seedMessages, autoEnable
     const justCrossedSuggestionThreshold = userMessageCount === 8
     setJustSuggested(justCrossedSuggestionThreshold)
 
-    setMessagesAndRef(prev => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: response.replyText,
-        createdAt: new Date().toISOString(),
-        tip: response.tip
-      }
-    ])
+    if (streamedMessageCreated) {
+      // The message already exists on screen from streaming in — just
+      // reconcile its final content (and tip, always undefined here, kept
+      // only for shape-consistency) in case the last chunk hadn't landed yet.
+      setMessagesAndRef(prev =>
+        prev.map(m => (m.id === assistantMessageId ? { ...m, content: response.replyText, tip: response.tip } : m))
+      )
+    } else {
+      setMessagesAndRef(prev => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: response.replyText,
+          createdAt: new Date().toISOString(),
+          tip: response.tip
+        }
+      ])
+    }
 
     if (response.tip && profile.whatHelps.some(h => response.tip!.action.toLowerCase().includes(h.toLowerCase()))) {
       memory.remember('effective_strategy', response.tip.action, 0.6, 'conversation')

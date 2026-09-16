@@ -15,17 +15,21 @@ import type { AIContext, AIProvider, AIResponse } from './AIProvider'
  * gap a real provider closes; see GeminiProvider.
  */
 export class MockAIProvider implements AIProvider {
-  async generateResponse(context: AIContext): Promise<AIResponse> {
+  async generateResponse(context: AIContext, onChunk?: (textSoFar: string) => void): Promise<AIResponse> {
     const { recentMessages, currentMessage } = context
 
     if (this.isJustCheckingIn(currentMessage)) {
-      return { replyText: "Good to hear from you. What's on your mind, or just saying hi?" }
+      const response = { replyText: "Good to hear from you. What's on your mind, or just saying hi?" }
+      onChunk?.(response.replyText)
+      return response
     }
 
     // Exception: an explicit request for something to do right now skips
     // exploration entirely, however little context there is.
     if (this.wantsImmediateHelp(currentMessage)) {
-      return this.buildTipResponse(context)
+      const response = this.buildTipResponse(context)
+      onChunk?.(response.replyText)
+      return response
     }
 
     // If the last thing MindTip said was exploring (no tip), the user is
@@ -35,10 +39,14 @@ export class MockAIProvider implements AIProvider {
     const alreadyExplored = lastAssistantMessage !== undefined && !lastAssistantMessage.tip
 
     if (this.isVague(currentMessage) && !alreadyExplored) {
-      return { replyText: this.pickExploratoryQuestion(currentMessage) }
+      const response = { replyText: this.pickExploratoryQuestion(currentMessage) }
+      onChunk?.(response.replyText)
+      return response
     }
 
-    return this.buildTipResponse(context)
+    const response = this.buildTipResponse(context)
+    onChunk?.(response.replyText)
+    return response
   }
 
   private buildTipResponse(context: AIContext): AIResponse {
