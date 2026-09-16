@@ -8,7 +8,7 @@
 // Default path: OpenAI TTS (shimmer voice) -- unchanged from before.
 // Requires env var: OPENAI_API_KEY.
 //
-// voice=noir-detective / voice=batman paths: Cartesia Sonic instead, with
+// voice=noir-detective / voice=therapist paths: Cartesia Sonic instead, with
 // real voices picked from the actual library (see CARTESIA_VOICES below for
 // which one and why) plus generation_config to push delivery toward
 // something more dramatic than a flat reading -- both speed and emotion are
@@ -30,10 +30,10 @@ const CARTESIA_VOICES: Record<string, CartesiaVoiceConfig> = {
     speed: 0.9,
     emotion: 'mysterious'
   },
-  batman: {
-    voiceId: 'dbfa416f-d5c3-4006-854b-235ef6bdf4fd', // Damon - Commanding Narrator: "deep and serious... steady gravitas"
-    speed: 0.88,
-    emotion: 'determined'
+  therapist: {
+    voiceId: 'dc52ada6-0e11-4684-a8fa-e0af5b7bdcb2', // Gary - Composed Advisor: "measured and direct delivery for no-nonsense conversations"
+    speed: 0.95,
+    emotion: 'skeptical'
   },
   astronaut: {
     voiceId: 'aa2cafe9-97ba-4052-ac3c-875000f95212', // Zander - Composed Advisor: "measured and calm presence"

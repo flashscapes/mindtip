@@ -38,7 +38,7 @@ export interface CharacterTheme {
   textColor?: string
   placeholderColor?: string
   accentColor?: string
-  atmosphere?: 'noir' | 'gotham' | 'study' | 'arctic' | 'camp' | 'orbit'
+  atmosphere?: 'noir' | 'study' | 'arctic' | 'camp' | 'orbit'
   bubbles?: BubbleTheme
   inkColors?: InkColors
   lineHeight?: number
@@ -60,20 +60,20 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
       timestampColor: 'rgba(201,162,39,0.65)'
     }
   },
-  batman: {
-    font: "'Cinzel', serif",
-    background: 'linear-gradient(180deg, #050810 0%, #0A1220 45%, #0D1830 100%)',
-    textColor: '#C8DCF5',
-    placeholderColor: 'rgba(200,220,245,0.4)',
-    accentColor: '#D4AF37',
-    atmosphere: 'gotham',
-    bubbles: {
-      assistantBg: 'linear-gradient(160deg, #1A2B4D, #0D1830)',
-      assistantText: '#C8DCF5',
-      userBg: 'linear-gradient(160deg, #4A7FE0, #2A4A8A)',
-      userText: '#EAF2FF',
-      timestampColor: 'rgba(212,175,55,0.75)'
-    }
+  // Deliberately the plainest theme in the app -- no atmosphere, no
+  // bubbles, no display font. The Therapist is meant to be the grounded,
+  // non-theatrical counterpoint to the other characters (see Home.tsx's
+  // persona), so he gets the app's own default UI font (Inter) rather
+  // than a character-y display font, and a calm, muted backdrop instead
+  // of a staged scene. Reuses Batman's former ring position and blue
+  // accent, which already reads as calm/professional in this context --
+  // the "Batman-ness" was the Gotham atmosphere and persona, not the color.
+  therapist: {
+    font: "'Inter', sans-serif",
+    background: 'linear-gradient(180deg, #1C222B 0%, #262E3A 100%)',
+    textColor: '#E4E8EE',
+    placeholderColor: 'rgba(228,232,238,0.4)',
+    accentColor: '#7DA0C4'
   },
   historian: {
     font: "'EB Garamond', serif",

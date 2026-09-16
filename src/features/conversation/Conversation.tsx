@@ -12,7 +12,6 @@ import { STORAGE_KEYS } from '@/lib/constants'
 import { getConversationRecord, saveConversationRecord } from '@/services/conversation/ConversationStore'
 import { CHARACTER_THEMES } from '@/lib/characterThemes'
 import { NoirSkyline } from './NoirSkyline'
-import { GothamSkyline } from './GothamSkyline'
 import { StudyDesk } from './StudyDesk'
 import { GlacierPeaks } from './GlacierPeaks'
 import { InfantryCamp } from './InfantryCamp'
@@ -474,12 +473,6 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
             <ellipse cx="30" cy="30" rx="14" ry="16" fill={theme.accentColor} />
             <path d="M8 26 Q30 6 52 26 Q52 32 44 30 Q30 22 16 30 Q8 32 8 26 Z" fill={theme.accentColor} />
           </svg>
-        </>
-      )}
-      {theme?.atmosphere === 'gotham' && (
-        <>
-          <GothamSkyline />
-          <div className="absolute inset-0 mindtip-gotham-fog pointer-events-none" />
         </>
       )}
       {theme?.atmosphere === 'study' && <StudyDesk />}
