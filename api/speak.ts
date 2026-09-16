@@ -32,7 +32,7 @@ const CARTESIA_VOICES: Record<string, CartesiaVoiceConfig> = {
   },
   batman: {
     voiceId: 'dbfa416f-d5c3-4006-854b-235ef6bdf4fd', // Damon - Commanding Narrator: "deep and serious... steady gravitas"
-    speed: 0.92,
+    speed: 0.85,
     emotion: 'determined'
   },
   astronaut: {
