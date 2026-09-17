@@ -82,13 +82,27 @@ async function speakText(text: string, voiceKey?: string, onDebug?: (msg: string
 
     onDebug?.(`Segment ${i + 1}/${sentences.length}: ${blob.size} bytes`);
     const url = URL.createObjectURL(blob);
-    const audio = getSharedAudio();
-    audio.src = url;
-    await new Promise<void>((resolve, reject) => {
-      audio.onended = () => resolve();
-      audio.onerror = () => reject(new Error(`Audio playback failed: ${audio.error?.message ?? 'unknown'}`));
-      audio.play().then(() => onDebug?.(`Segment ${i + 1} playing`)).catch(reject);
-    });
+    try {
+      const audio = getSharedAudio();
+      audio.src = url;
+      await new Promise<void>((resolve, reject) => {
+        audio.onended = () => resolve();
+        audio.onerror = () => reject(new Error(`Audio playback failed: ${audio.error?.message ?? 'unknown'}`));
+        audio.play().then(() => onDebug?.(`Segment ${i + 1} playing`)).catch(reject);
+      });
+    } catch (err) {
+      // A playback error on one segment (a real, observed failure mode —
+      // the shared <audio> element being reused rapidly across segments)
+      // must not kill every sentence after it. Previously this threw all
+      // the way out of the loop uncaught, which is exactly what made the
+      // voice "just stop cold" partway through a reply with no error
+      // surfaced — speakResponse's outer catch only logs and moves on to
+      // listening again, it never resumes the remaining segments.
+      onDebug?.(`Segment ${i + 1} playback failed, skipping: ${err instanceof Error ? err.message : String(err)}`);
+      console.error('Segment playback failed:', err);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
   }
 }
 
