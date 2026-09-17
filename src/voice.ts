@@ -277,8 +277,8 @@ class VoiceActivityDetector {
     recorder.stop();
   }
 
-  stop(): void {
-    void this.teardown();
+  stop(): Promise<void> {
+    return this.teardown();
   }
 
   private async teardown(): Promise<void> {
@@ -330,13 +330,23 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
   const enabledRef = useRef(false);
   const vadRef = useRef<VoiceActivityDetector | null>(null);
 
-  const startListening = useCallback((isRetry = false) => {
+  const startListening = useCallback((isRetry = false, noSpeechRetryCount = 0) => {
     if (!enabledRef.current) return;
     setState('listening');
     logDebug('Listening for your voice…');
 
+    let noSpeechTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
     const vad = new VoiceActivityDetector({
       onDebug: logDebug,
+      onSpeechStart: () => {
+        // Real speech is happening — let the normal turn-ending logic
+        // (silence after speech) take over instead of the watchdog.
+        if (noSpeechTimeoutId !== null) {
+          clearTimeout(noSpeechTimeoutId);
+          noSpeechTimeoutId = null;
+        }
+      },
       onSpeechEnd: async (blob, durationMs) => {
         // A clip shorter than this is almost certainly a noise blip, not a
         // word — sending it to Whisper risks a hallucinated transcription
@@ -384,22 +394,47 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     const micTimeout = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('Mic access timed out after 10s')), 10000)
     );
-    Promise.race([vad.start(), micTimeout]).catch((err) => {
-      logDebug(`Mic access failed: ${err instanceof Error ? err.message : String(err)}`);
-      console.error('Mic access failed:', err);
-      // A single automatic retry — a transient mic/AudioContext hiccup
-      // between turns (e.g. the previous turn's resources not fully
-      // released yet) is common enough on mobile that silently stranding
-      // the conversation at idle after one failure is worse than trying
-      // once more. If the retry also fails, give up and surface idle so
-      // at minimum the UI reflects reality rather than looking hung.
-      if (!isRetry && enabledRef.current) {
-        logDebug('Retrying mic access once…');
-        setTimeout(() => startListening(true), 400);
-      } else {
-        setState('idle');
-      }
-    });
+    Promise.race([vad.start(), micTimeout])
+      .then(() => {
+        // Mic access succeeded and monitoring has begun. If no speech is
+        // ever detected — including the case where getUserMedia silently
+        // handed back a dead/muted stream, a real and observed mobile
+        // failure mode that produces no error at all — this guarantees
+        // the app doesn't just sit listening in total silence forever.
+        // Tearing down and retrying gets a genuinely fresh getUserMedia
+        // call, which has a real chance of recovering a working stream
+        // even when the current one doesn't work, without needing to know
+        // exactly why it didn't.
+        const NO_SPEECH_TIMEOUT_MS = 25000;
+        const MAX_NO_SPEECH_RETRIES = 3;
+        noSpeechTimeoutId = setTimeout(async () => {
+          if (vadRef.current !== vad) return; // superseded by a newer listen cycle already
+          logDebug(`No speech detected within ${NO_SPEECH_TIMEOUT_MS / 1000}s — retrying with a fresh mic stream`);
+          await vad.stop();
+          if (noSpeechRetryCount < MAX_NO_SPEECH_RETRIES && enabledRef.current) {
+            startListening(false, noSpeechRetryCount + 1);
+          } else {
+            logDebug('No speech detected after repeated retries — giving up for now');
+            setState('idle');
+          }
+        }, NO_SPEECH_TIMEOUT_MS);
+      })
+      .catch((err) => {
+        logDebug(`Mic access failed: ${err instanceof Error ? err.message : String(err)}`);
+        console.error('Mic access failed:', err);
+        // A single automatic retry — a transient mic/AudioContext hiccup
+        // between turns (e.g. the previous turn's resources not fully
+        // released yet) is common enough on mobile that silently stranding
+        // the conversation at idle after one failure is worse than trying
+        // once more. If the retry also fails, give up and surface idle so
+        // at minimum the UI reflects reality rather than looking hung.
+        if (!isRetry && enabledRef.current) {
+          logDebug('Retrying mic access once…');
+          setTimeout(() => startListening(true), 400);
+        } else {
+          setState('idle');
+        }
+      });
   }, [onUserSpeech]);
 
   /** Call once, from a real tap. Unlocks audio for the whole session — actual

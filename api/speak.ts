@@ -31,8 +31,8 @@ const CARTESIA_VOICES: Record<string, CartesiaVoiceConfig> = {
     emotion: 'mysterious'
   },
   therapist: {
-    voiceId: 'cd6256ef-2b2a-41f6-a8d8-c1307af5061f', // Preston - Relatable Pal: "confident... expressive tone and charismatic delivery"
-    speed: 1.0,
+    voiceId: '65209f8e-6140-4a20-b819-3cc2e21da19b', // Nolan - Expressive Agent: "Warm, engaging, and effortlessly dependable with a natural, conversational touch"
+    speed: 0.98,
     emotion: 'determined'
   },
   poker: {
