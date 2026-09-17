@@ -31,9 +31,9 @@ const CARTESIA_VOICES: Record<string, CartesiaVoiceConfig> = {
     emotion: 'mysterious'
   },
   therapist: {
-    voiceId: 'dc52ada6-0e11-4684-a8fa-e0af5b7bdcb2', // Gary - Composed Advisor: "measured and direct delivery for no-nonsense conversations"
-    speed: 0.95,
-    emotion: 'contemplative'
+    voiceId: 'cd6256ef-2b2a-41f6-a8d8-c1307af5061f', // Preston - Relatable Pal: "confident... expressive tone and charismatic delivery"
+    speed: 1.0,
+    emotion: 'determined'
   },
   astronaut: {
     voiceId: 'aa2cafe9-97ba-4052-ac3c-875000f95212', // Zander - Composed Advisor: "measured and calm presence"
