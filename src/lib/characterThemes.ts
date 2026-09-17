@@ -74,12 +74,27 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
   // of a staged scene. Reuses Batman's former ring position and blue
   // accent, which already reads as calm/professional in this context --
   // the "Batman-ness" was the Gotham atmosphere and persona, not the color.
+  // Real photo background (same pattern as poker below) plus premium
+  // bubbles -- warm charcoal/espresso for him, warm amber-cream for the
+  // user, echoing the lamp's own warm light rather than a cool/clinical
+  // palette, matching the calm-but-warm persona.
   therapist: {
     font: "'Inter', sans-serif",
-    background: 'linear-gradient(180deg, #1C222B 0%, #262E3A 100%)',
-    textColor: '#E4E8EE',
-    placeholderColor: 'rgba(228,232,238,0.4)',
-    accentColor: '#7DA0C4'
+    background:
+      'linear-gradient(180deg, rgba(10,8,6,0.5) 0%, rgba(10,8,6,0.2) 30%, rgba(10,8,6,0.35) 70%, rgba(10,8,6,0.8) 100%), ' +
+      "url('/images/therapist-bg.jpg') center 35% / cover no-repeat",
+    textColor: '#EDE3D0',
+    placeholderColor: 'rgba(237,227,208,0.4)',
+    accentColor: '#D9B67A',
+    bubbles: {
+      assistantBg: 'linear-gradient(160deg, rgba(42,34,28,0.9), rgba(20,16,13,0.94))',
+      assistantText: '#EDE3D0',
+      assistantBorder: 'rgba(217,182,122,0.6)',
+      userBg: 'linear-gradient(160deg, #E8C896, #C9A05C)',
+      userText: '#2A1E10',
+      userBorder: 'rgba(217,182,122,0.85)',
+      timestampColor: '#D9B67A'
+    }
   },
   // Uses a real photo (not an illustrated atmosphere component like the
   // other characters) -- the room itself IS the visual, no staged SVG scene
