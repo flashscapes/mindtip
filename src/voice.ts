@@ -148,6 +148,7 @@ interface VadOptions {
 
 class VoiceActivityDetector {
   private stream: MediaStream | null = null;
+  private audioCtx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private recorder: MediaRecorder | null = null;
@@ -171,33 +172,25 @@ class VoiceActivityDetector {
     };
   }
 
-  // Refactored to accept a shared, persistent AudioContext instead of
-  // creating a fresh one every turn -- repeatedly creating/destroying
-  // AudioContexts (not just getUserMedia streams) is the documented root
-  // cause of iOS Safari's audio session degrading over a conversation,
-  // eventually producing dead/silent mic streams that Whisper hallucinates
-  // plausible-sounding garbage from, or that never register speech at all.
-  // Only the per-turn MediaStream and its source/analyser nodes are still
-  // created and torn down per turn -- the AudioContext itself now lives
-  // for the whole voice-enabled session (owned by the hook, see
-  // getSharedAudioContext below).
-  async start(audioCtx: AudioContext): Promise<void> {
-    // Defensive: iOS can suspend a context that's gone unused for a bit
-    // (e.g. during TTS playback on the separate <audio> element) --
-    // resuming a context that's already running is a harmless no-op.
-    if (audioCtx.state === 'suspended') {
-      try {
-        await audioCtx.resume();
-      } catch {
-        // Best-effort -- if this fails, the getUserMedia call below will
-        // surface the real error anyway.
-      }
-    }
-
+  // Reverted from a shared/persistent AudioContext back to one created
+  // fresh per turn. The persistent-context version was meant to fix a
+  // documented iOS degradation pattern, but introduced a worse regression:
+  // a context can end up 'suspended' during the "speaking" (TTS) phase,
+  // and resuming an AudioContext from code that isn't directly inside a
+  // user gesture handler is exactly the kind of thing Safari can silently
+  // refuse -- which would leave the shared context permanently suspended,
+  // meaning the analyser never sees real audio again and no turn is ever
+  // detected as finished. That's total failure, strictly worse than the
+  // intermittent degradation it was meant to address. This per-turn
+  // approach is the known-working baseline; a real fix for the iOS
+  // degradation issue needs to be verified on an actual device before
+  // shipping again, not iterated on blind.
+  async start(): Promise<void> {
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.opts.onDebug(`Mic stream acquired: ${this.stream.getAudioTracks().length} audio track(s), enabled=${this.stream.getAudioTracks()[0]?.enabled}`);
-    this.sourceNode = audioCtx.createMediaStreamSource(this.stream);
-    this.analyser = audioCtx.createAnalyser();
+    this.audioCtx = new AudioContext();
+    this.sourceNode = this.audioCtx.createMediaStreamSource(this.stream);
+    this.analyser = this.audioCtx.createAnalyser();
     this.analyser.fftSize = 512;
     this.sourceNode.connect(this.analyser);
 
@@ -285,24 +278,28 @@ class VoiceActivityDetector {
   }
 
   stop(): void {
-    this.teardown();
+    void this.teardown();
   }
 
-  private teardown(): void {
+  private async teardown(): Promise<void> {
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
     this.rafId = null;
     this.stream?.getTracks().forEach((t) => t.stop());
-    // Disconnecting these matters now that the AudioContext itself is
-    // long-lived (shared across the whole voice session, not recreated
-    // per turn) -- without this, every turn would leave its old source
-    // and analyser nodes still attached to the shared context, and a long
-    // conversation would accumulate an ever-growing, never-cleaned audio
-    // graph on that one context for its entire lifetime.
     this.sourceNode?.disconnect();
     this.analyser?.disconnect();
+    // AudioContext.close() is genuinely async — awaiting it (instead of
+    // firing and forgetting) means a fresh AudioContext for the next turn
+    // never gets created before this one has actually finished releasing
+    // its resources, which is a real risk on constrained mobile hardware.
+    try {
+      await this.audioCtx?.close();
+    } catch {
+      // Already closed or never fully opened — nothing to do.
+    }
     this.stream = null;
     this.sourceNode = null;
     this.analyser = null;
+    this.audioCtx = null;
     this.recorder = null;
   }
 }
@@ -332,18 +329,6 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
   }, []);
   const enabledRef = useRef(false);
   const vadRef = useRef<VoiceActivityDetector | null>(null);
-  // Created once per voice-enabled session and reused for every listen
-  // turn — see VoiceActivityDetector's constructor comment for why:
-  // recreating an AudioContext per turn is the documented root cause of
-  // iOS Safari's audio session degrading over a conversation.
-  const audioCtxRef = useRef<AudioContext | null>(null);
-
-  const getSharedAudioContext = (): AudioContext => {
-    if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
-      audioCtxRef.current = new AudioContext();
-    }
-    return audioCtxRef.current;
-  };
 
   const startListening = useCallback((isRetry = false) => {
     if (!enabledRef.current) return;
@@ -399,7 +384,7 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     const micTimeout = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('Mic access timed out after 10s')), 10000)
     );
-    Promise.race([vad.start(getSharedAudioContext()), micTimeout]).catch((err) => {
+    Promise.race([vad.start(), micTimeout]).catch((err) => {
       logDebug(`Mic access failed: ${err instanceof Error ? err.message : String(err)}`);
       console.error('Mic access failed:', err);
       // A single automatic retry — a transient mic/AudioContext hiccup
@@ -436,10 +421,6 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     enabledRef.current = false;
     setEnabled(false);
     setState('idle');
-    if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
-      void audioCtxRef.current.close();
-    }
-    audioCtxRef.current = null;
   }, []);
 
   /** Call whenever MindTip has a new response. Auto-starts listening when done speaking. */
@@ -474,10 +455,6 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     return () => {
       enabledRef.current = false;
       vadRef.current?.stop();
-      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
-        void audioCtxRef.current.close();
-      }
-      audioCtxRef.current = null;
     };
   }, []);
 
