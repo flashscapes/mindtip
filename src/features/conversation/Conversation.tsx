@@ -135,7 +135,7 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
     console.debug(`[MindTip] ${messagesRef.current.length} messages in this conversation`)
   }
 
-  const send = async (text: string) => {
+  const send = async (text: string, opts?: { hidden?: boolean }) => {
     const trimmed = text.trim()
     if (!trimmed || isGeneratingRef.current) return
 
@@ -151,13 +151,15 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
       return
     }
 
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: trimmed,
-      createdAt: new Date().toISOString()
+    if (!opts?.hidden) {
+      const userMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: trimmed,
+        createdAt: new Date().toISOString()
+      }
+      setMessagesAndRef(prev => [...prev, userMessage])
     }
-    setMessagesAndRef(prev => [...prev, userMessage])
     setInput('')
     setJustSuggested(false)
 
@@ -455,7 +457,7 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
       if (reentryContext && reentryContext.length > 0) {
         void initiateReentry()
       } else if (initialMessage) {
-        void send(initialMessage)
+        void send(initialMessage, { hidden: true })
       } else if (autoEnableVoice) {
         // No initial message means nothing will trigger the usual
         // speak-response-then-listen chain (e.g. resuming via "Continue
