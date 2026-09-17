@@ -113,7 +113,7 @@ export function ChatBubble({
     const plainTailRadius = bubbles.tailRadius ?? 4
     return (
       <div className={`flex items-end gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
-        {!isUser && <FedoraIcon color={bubbles.timestampColor} />}
+        {!isUser && bubbles.icon === 'fedora' && <FedoraIcon color={bubbles.timestampColor} />}
         <div
           className="max-w-[78%] flex flex-col"
           style={isUser ? { marginRight: staggerOffset } : { marginLeft: staggerOffset }}
@@ -129,7 +129,10 @@ export function ChatBubble({
                 ? {
                     borderRadius: plainRadius,
                     borderBottomRightRadius: isUser ? plainTailRadius : undefined,
-                    borderBottomLeftRadius: !isUser ? plainTailRadius : undefined
+                    borderBottomLeftRadius: !isUser ? plainTailRadius : undefined,
+                    ...(hudBorder
+                      ? { border: `1.5px solid ${hudBorder}`, boxShadow: `0 2px 10px ${hudBorder}33` }
+                      : {})
                   }
                 : {}),
               ...(isIce

@@ -12,7 +12,6 @@ import { STORAGE_KEYS } from '@/lib/constants'
 import { getConversationRecord, saveConversationRecord } from '@/services/conversation/ConversationStore'
 import { CHARACTER_THEMES } from '@/lib/characterThemes'
 import { NoirSkyline } from './NoirSkyline'
-import { StudyDesk } from './StudyDesk'
 import { GlacierPeaks } from './GlacierPeaks'
 import { InfantryCamp } from './InfantryCamp'
 import { AstronautOrbit } from './AstronautOrbit'
@@ -502,7 +501,6 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
           </svg>
         </>
       )}
-      {theme?.atmosphere === 'study' && <StudyDesk />}
       {theme?.atmosphere === 'arctic' && <GlacierPeaks />}
       {theme?.atmosphere === 'camp' && <InfantryCamp />}
       {theme?.atmosphere === 'orbit' && <AstronautOrbit />}
@@ -529,7 +527,7 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
         </div>
       </header>
 
-      <div className="relative flex-1 overflow-y-auto px-8 py-10 flex flex-col gap-6" style={theme?.atmosphere === 'study' ? { paddingLeft: 60 } : undefined}>
+      <div className="relative flex-1 overflow-y-auto px-8 py-10 flex flex-col gap-6">
         {messages.map(m => (
           <ChatBubble
             key={m.id}

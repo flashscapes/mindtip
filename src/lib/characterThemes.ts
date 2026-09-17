@@ -14,6 +14,11 @@ export interface BubbleTheme {
   // 'hud' gives it a sharp bordered panel with small corner brackets,
   // like a heads-up-display readout. See ChatBubble.tsx.
   shape?: 'ice' | 'hud'
+  // The little fedora glyph next to assistant messages was previously
+  // unconditional whenever bubbles was set at all, showing up incongruously
+  // next to infantry/survivalist/astronaut messages too -- noir-detective
+  // is the only character it was actually designed for.
+  icon?: 'fedora'
   assistantBorder?: string
   userBorder?: string
   // Only used by the plain rounded-rect shape (shape unset) -- lets a
@@ -38,7 +43,7 @@ export interface CharacterTheme {
   textColor?: string
   placeholderColor?: string
   accentColor?: string
-  atmosphere?: 'noir' | 'study' | 'arctic' | 'camp' | 'orbit'
+  atmosphere?: 'noir' | 'arctic' | 'camp' | 'orbit'
   bubbles?: BubbleTheme
   inkColors?: InkColors
   lineHeight?: number
@@ -57,7 +62,8 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
       assistantText: '#E8DFC8',
       userBg: 'linear-gradient(160deg, #6B4F22, #4A3618)',
       userText: '#F5E8C8',
-      timestampColor: 'rgba(201,162,39,0.65)'
+      timestampColor: 'rgba(201,162,39,0.65)',
+      icon: 'fedora'
     }
   },
   // Deliberately the plainest theme in the app -- no atmosphere, no
@@ -75,19 +81,28 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
     placeholderColor: 'rgba(228,232,238,0.4)',
     accentColor: '#7DA0C4'
   },
-  historian: {
-    font: "'EB Garamond', serif",
+  // Uses a real photo (not an illustrated atmosphere component like the
+  // other characters) -- the room itself IS the visual, no staged SVG scene
+  // needed on top of it. A dark scrim gradient sits between the photo and
+  // the text layer for legibility, stacked as an earlier layer in the same
+  // background shorthand rather than a separate element.
+  poker: {
+    font: "'Inter', sans-serif",
     background:
-      'repeating-linear-gradient(95deg, rgba(0,0,0,0.09) 0px, rgba(0,0,0,0.09) 1px, transparent 1px, transparent 8px), ' +
-      'repeating-linear-gradient(95deg, rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 2px, transparent 2px, transparent 21px), ' +
-      'radial-gradient(ellipse at 28% 15%, rgba(255,255,255,0.07), transparent 55%), ' +
-      'linear-gradient(160deg, #6B4226 0%, #4A2C17 55%, #3A2110 100%)',
-    textColor: '#3A2E14',
-    placeholderColor: 'rgba(58,46,20,0.4)',
-    accentColor: '#9C7A2E',
-    atmosphere: 'study',
-    inkColors: { assistant: '#3A2E14', user: '#1E3A6E' },
-    lineHeight: 28
+      'linear-gradient(180deg, rgba(5,5,10,0.55) 0%, rgba(5,5,10,0.25) 30%, rgba(5,5,10,0.35) 70%, rgba(5,5,10,0.75) 100%), ' +
+      "url('/images/poker-room-bg.jpg') center 30% / cover no-repeat",
+    textColor: '#F0E8D0',
+    placeholderColor: 'rgba(240,232,208,0.4)',
+    accentColor: '#E8C878',
+    bubbles: {
+      assistantBg: 'linear-gradient(160deg, rgba(30,52,40,0.88), rgba(13,31,23,0.92))',
+      assistantText: '#F0E8D0',
+      assistantBorder: 'rgba(232,200,120,0.7)',
+      userBg: 'linear-gradient(160deg, #E8C878, #B8903E)',
+      userText: '#1A1408',
+      userBorder: 'rgba(232,200,120,0.9)',
+      timestampColor: '#E8C878'
+    }
   },
   infantry: {
     font: "'Big Shoulders Stencil Text', sans-serif",
