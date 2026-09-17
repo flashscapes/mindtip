@@ -35,6 +35,11 @@ const CARTESIA_VOICES: Record<string, CartesiaVoiceConfig> = {
     speed: 1.0,
     emotion: 'determined'
   },
+  poker: {
+    voiceId: '87a983d8-3471-4c4b-9ade-f1d10a4110ac', // Devin - Relaxed Spirit: "smooth, easygoing tone that feels relaxed and effortlessly cool"
+    speed: 0.97,
+    emotion: 'determined'
+  },
   astronaut: {
     voiceId: 'aa2cafe9-97ba-4052-ac3c-875000f95212', // Zander - Composed Advisor: "measured and calm presence"
     speed: 0.97,
