@@ -45,6 +45,19 @@ interface ConversationProps {
   onExit: () => void
 }
 
+// Defense-in-depth against a report of the chat occasionally hanging after
+// a few exchanges: GeminiProvider already has its own internal timeout
+// (~35s), but this wraps every AI call at the call site too, so even if
+// that internal timeout somehow fails to fire for a cause not yet
+// diagnosed, the UI still can never be stuck waiting forever -- it will
+// always eventually surface as a normal, catchable error instead.
+function withHardTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${label} did not complete within ${ms / 1000}s`)), ms))
+  ])
+}
+
 export function Conversation({ profile, initialMessage, seedMessages, reentryContext, autoEnableVoice, character, onReflectionReady, onExit }: ConversationProps) {
   const ai = useMemo(() => createAIProvider(), [])
   const memory = useMemo(() => new LocalMemoryService(), [])
@@ -175,8 +188,10 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
     // calls this callback at all, so it behaves exactly as before.
     const assistantMessageId = crypto.randomUUID()
     let streamedMessageCreated = false
+    let abandoned = false
 
     const handleChunk = (textSoFar: string) => {
+      if (abandoned) return
       if (!streamedMessageCreated) {
         streamedMessageCreated = true
         setIsThinking(false)
@@ -191,17 +206,22 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
 
     let response: Awaited<ReturnType<typeof ai.generateResponse>>
     try {
-      response = await ai.generateResponse(
-        {
-          profile,
-          character,
-          relevantMemories,
-          recentMessages: [...hiddenPriorMessagesRef.current, ...messagesRef.current],
-          currentMessage: trimmed
-        },
-        handleChunk
+      response = await withHardTimeout(
+        ai.generateResponse(
+          {
+            profile,
+            character,
+            relevantMemories,
+            recentMessages: [...hiddenPriorMessagesRef.current, ...messagesRef.current],
+            currentMessage: trimmed
+          },
+          handleChunk
+        ),
+        45000,
+        'Response'
       )
     } catch (err) {
+      abandoned = true
       setIsThinking(false)
       console.error('AI response generation failed:', err)
 
@@ -300,7 +320,9 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
 
     const assistantMessageId = crypto.randomUUID()
     let streamedMessageCreated = false
+    let abandoned = false
     const handleChunk = (textSoFar: string) => {
+      if (abandoned) return
       if (!streamedMessageCreated) {
         streamedMessageCreated = true
         setIsThinking(false)
@@ -314,16 +336,20 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
     }
 
     try {
-      const response = await ai.generateResponse(
-        {
-          profile,
-          character,
-          relevantMemories: [],
-          recentMessages: hiddenPriorMessagesRef.current,
-          currentMessage: '',
-          isReentry: true
-        },
-        handleChunk
+      const response = await withHardTimeout(
+        ai.generateResponse(
+          {
+            profile,
+            character,
+            relevantMemories: [],
+            recentMessages: hiddenPriorMessagesRef.current,
+            currentMessage: '',
+            isReentry: true
+          },
+          handleChunk
+        ),
+        45000,
+        'Re-entry check-in'
       )
 
       if (streamedMessageCreated) {
@@ -336,6 +362,7 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
       }
       void voice.speakResponse(response.replyText, character?.key)
     } catch (err) {
+      abandoned = true
       console.error('Re-entry check-in generation failed:', err)
       const partial = err instanceof StreamingResponseError ? err.partialText : undefined
       if (streamedMessageCreated && partial) {

@@ -7,7 +7,13 @@ export const generateRouter = Router()
 generateRouter.post('/generate', async (req, res) => {
   const context = req.body as Partial<AIContext>
 
-  if (!context?.currentMessage || !context?.profile) {
+  // currentMessage is allowed to be empty specifically for a re-entry
+  // check-in (see initiateReentry in Conversation.tsx) -- there genuinely
+  // is no "current message" for that call, only prior history. Checking
+  // !context.currentMessage here would treat that empty string as missing
+  // and reject every single re-entry attempt with a 400 before it ever
+  // reaches Gemini, which is exactly what was happening.
+  if ((!context?.currentMessage && !context?.isReentry) || !context?.profile) {
     res.status(400).json({ error: 'Request is missing profile or currentMessage.' })
     return
   }

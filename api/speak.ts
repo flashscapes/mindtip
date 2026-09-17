@@ -33,7 +33,7 @@ const CARTESIA_VOICES: Record<string, CartesiaVoiceConfig> = {
   therapist: {
     voiceId: 'dc52ada6-0e11-4684-a8fa-e0af5b7bdcb2', // Gary - Composed Advisor: "measured and direct delivery for no-nonsense conversations"
     speed: 0.95,
-    emotion: 'skeptical'
+    emotion: 'contemplative'
   },
   astronaut: {
     voiceId: 'aa2cafe9-97ba-4052-ac3c-875000f95212', // Zander - Composed Advisor: "measured and calm presence"
