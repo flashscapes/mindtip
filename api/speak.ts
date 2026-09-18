@@ -69,7 +69,7 @@ async function speakWithCartesia(text: string, config: CartesiaVoiceConfig): Pro
       model_id: 'sonic-3.6',
       transcript: text,
       voice: { id: config.voiceId },
-      output_format: { container: 'mp3', sample_rate: 44100, bit_rate: 128000 },
+      output_format: { container: 'mp3', sample_rate: 24000, bit_rate: 64000 }, // speech-appropriate quality, not CD-quality -- smaller/faster with no perceptible loss for voice
       generation_config: {
         speed: config.speed,
         emotion: config.emotion
