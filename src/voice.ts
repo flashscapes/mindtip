@@ -399,17 +399,30 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
   const [state, setState] = useState<ConversationState>('idle');
   const [enabled, setEnabled] = useState(false);
   const [debugLog, setDebugLog] = useState<string[]>([]);
+  // Every logDebug call used to trigger setDebugLog directly, which is
+  // React state -- meaning the entire Conversation screen re-rendered on
+  // every single line, including frequent ones like the mic-level reading
+  // (roughly 2x/second while listening), even with the debug panel
+  // collapsed and nobody looking at it. That's real, ongoing overhead the
+  // diagnostic instrumentation itself was adding on top of normal
+  // conversation flow. This ref always holds the complete, immediate
+  // history (nothing is lost); the visible React state is now synced from
+  // it at most once a second, cutting re-render frequency drastically
+  // while console.log (not React-tracked, effectively free) still fires
+  // instantly every time for anyone watching the console live.
+  const debugBufferRef = useRef<string[]>([]);
+  const debugFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logDebug = useCallback((msg: string) => {
     const t = new Date().toISOString().slice(11, 19);
     const line = `${t} ${msg}`;
-    // This log stream already exists at nearly every state transition in
-    // this file, but until now it only fed an internal React state array
-    // that nothing ever rendered or read -- it was invisible everywhere,
-    // including here in console.log. That's the actual gap: not missing
-    // instrumentation, but no way to access what was already being
-    // captured. Fixing that first, before adding anything new.
     console.log('[voice]', line);
-    setDebugLog(prev => [...prev.slice(-59), line]);
+    debugBufferRef.current = [...debugBufferRef.current.slice(-59), line];
+    if (debugFlushTimerRef.current === null) {
+      debugFlushTimerRef.current = setTimeout(() => {
+        debugFlushTimerRef.current = null;
+        setDebugLog(debugBufferRef.current);
+      }, 1000);
+    }
   }, []);
   const enabledRef = useRef(false);
   // Purely diagnostic: lets every log line below be tied to a specific
@@ -580,6 +593,10 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     return () => {
       enabledRef.current = false;
       vadRef.current?.stop();
+      if (debugFlushTimerRef.current !== null) {
+        clearTimeout(debugFlushTimerRef.current);
+        debugFlushTimerRef.current = null;
+      }
     };
   }, []);
 
