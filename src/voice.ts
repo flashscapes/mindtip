@@ -214,22 +214,17 @@ class VoiceActivityDetector {
   // degradation issue needs to be verified on an actual device before
   // shipping again, not iterated on blind.
   async start(): Promise<void> {
-    // EXPERIMENT (not a permanent architectural change): explicit
-    // constraints instead of browser defaults. Evidence from a real
-    // captured session showed the mic reporting fully healthy
-    // (enabled/muted/readyState all normal) while actually capturing
-    // dramatically less signal by turn 7-8 of a conversation -- the same
-    // voice, the same room, producing spikes of 15-27 early on and never
-    // exceeding ~3 later. Leading hypothesis: the browser's own adaptive
-    // audio processing (automatic gain control, echo cancellation) reacts
-    // to the repeated cycle of the app speaking through the speakers
-    // immediately before each listen phase, and degrades real sensitivity
-    // over repeated cycles. This turns that adaptive processing off
-    // entirely rather than changing anything about how the app interprets
-    // whatever signal it receives.
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { autoGainControl: false, echoCancellation: false, noiseSuppression: false }
-    });
+    // Reverted an earlier experiment here that explicitly disabled
+    // autoGainControl/echoCancellation/noiseSuppression. Evidence showed
+    // it made things worse, not better: a brand-new conversation's very
+    // first turn (not turn 7-8) came in with mic levels of 0.0-1.0, with
+    // the disabled settings confirmed applied via getSettings(). Automatic
+    // gain control's actual job is boosting quiet input to a usable
+    // level -- disabling it likely removed something that was helping
+    // normal speech register at all, rather than fixing the later-session
+    // degradation it was meant to address. Back to browser defaults while
+    // the real cause is still unknown.
+    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const track = this.stream.getAudioTracks()[0];
     this.opts.onDebug(
       `Mic stream acquired: ${this.stream.getAudioTracks().length} audio track(s), ` +
