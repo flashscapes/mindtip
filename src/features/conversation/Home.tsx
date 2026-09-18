@@ -294,7 +294,7 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
             {/* Soft, continuous, transparent gas aura — sits inset within
                 the baked-in nebula sphere so the two layer together rather
                 than fighting each other; no moving parts */}
-            <circle cx={ORB_X} cy={ORB_Y} r="90" fill="url(#homeAura)" />
+            <circle cx={ORB_X} cy={ORB_Y} r="78" fill="url(#homeAura)" />
 
             {/* The living orb — gentle continuous breathing, color shifts to
                 match the selected character (orbFrom/orbTo, unchanged logic) */}
