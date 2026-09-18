@@ -252,13 +252,26 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
             />
 
             {/* Connecting line from the selected planet to the orb — same
-                visual language as the constellation screens' star-to-orb lines */}
-            {activeCharacter && (
-              <line
-                x1={activeCharacter.x} y1={activeCharacter.y} x2={ORB_X} y2={ORB_Y}
-                stroke={activeCharacter.planetColor} strokeWidth="2.4" opacity="0.85"
-              />
-            )}
+                visual language as the constellation screens' star-to-orb lines.
+                Trimmed to the edges of both circles (portrait radius 83, orb
+                aura radius 78) rather than drawn center-to-center, which
+                previously ran the line straight through the portrait itself. */}
+            {activeCharacter && (() => {
+              const dx = ORB_X - activeCharacter.x
+              const dy = ORB_Y - activeCharacter.y
+              const dist = Math.sqrt(dx * dx + dy * dy) || 1
+              const ux = dx / dist
+              const uy = dy / dist
+              const PORTRAIT_R = 83
+              const ORB_R = 78
+              return (
+                <line
+                  x1={activeCharacter.x + ux * PORTRAIT_R} y1={activeCharacter.y + uy * PORTRAIT_R}
+                  x2={ORB_X - ux * ORB_R} y2={ORB_Y - uy * ORB_R}
+                  stroke={activeCharacter.planetColor} strokeWidth="2.4" opacity="0.85"
+                />
+              )
+            })()}
 
             {CHARACTERS.map((character, i) => (
               <g

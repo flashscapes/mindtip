@@ -157,7 +157,7 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
     }
   },
   astronaut: {
-    font: "'Orbitron', sans-serif",
+    font: "'Space Grotesk', sans-serif",
     background:
       'radial-gradient(ellipse at 28% 22%, rgba(61,42,107,0.5), transparent 55%), ' +
       'radial-gradient(ellipse at 85% 30%, rgba(31,107,117,0.3), transparent 35%), #02030A',
