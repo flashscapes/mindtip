@@ -185,6 +185,7 @@ interface VadOptions {
   silenceThreshold?: number; // amplitude (0-128 scale) below which is "quiet"
   silenceDurationMs?: number; // how long quiet must persist before ending the turn
   minSpeechDurationMs?: number; // how long amplitude must stay elevated before it counts as real speech, not a blip
+  minResumeDurationMs?: number; // shorter bar for recognizing speech has resumed mid-turn (interrupting an in-progress silence countdown) -- natural speech comes in short bursts between words, so this should be lower than the bar for starting a brand-new turn from silence, where being more conservative against false starts matters more
 }
 
 
@@ -212,6 +213,7 @@ class VoiceActivityDetector {
       silenceThreshold: opts.silenceThreshold ?? 5,
       silenceDurationMs: opts.silenceDurationMs ?? 3200,
       minSpeechDurationMs: opts.minSpeechDurationMs ?? 250,
+      minResumeDurationMs: opts.minResumeDurationMs ?? 100,
     };
   }
 
@@ -284,7 +286,19 @@ class VoiceActivityDetector {
     this.aboveThresholdSince = null;
     this.speechStartedAt = null;
     this.silenceStart = null;
-    this.recorder.start();
+    // Deliberately NOT starting the recorder here. The analyser above is
+    // already watching the stream independently, which is all that's
+    // needed to detect when speech begins -- recorder.start() itself now
+    // waits for that moment (see the onSpeechStart trigger in monitor()).
+    // A real captured session showed a 34-second recording where only the
+    // last 9 seconds were actual speech; the ~25s of near-silent waiting
+    // beforehand rode along in the same audio blob sent to Whisper, which
+    // is a documented trigger for its repetitive-hallucination failure
+    // mode on long, mostly-silent clips -- exactly what produced "A
+    // reflective conversation about feelings, relationships, and
+    // experiences, relationships, and experiences..." Recording only from
+    // the moment speech is confirmed eliminates that silent prefix
+    // entirely, and as a bonus makes for a smaller, faster upload.
     this.lastDebugAt = 0;
     this.monitor();
   }
@@ -319,19 +333,32 @@ class VoiceActivityDetector {
         this.speaking = true;
         this.speechStartedAt = this.aboveThresholdSince;
         this.opts.onDebug('Speech detected — recording turn');
+        // Recording begins now, not from when listening started -- see
+        // the constructor-time note above for why. One accepted tradeoff:
+        // since confirming real speech requires minSpeechDurationMs of
+        // sustained elevation first, the recorder starting only now means
+        // the very first ~250ms of the actual utterance (before it was
+        // confirmed as speech, not a blip) never gets captured. In
+        // practice this is a minor, likely-imperceptible clip at the very
+        // onset of the first word, not a mid-sentence loss -- and it's a
+        // clearly better trade than including up to tens of seconds of
+        // silence that actively causes Whisper to hallucinate.
+        this.recorder?.start();
         this.opts.onSpeechStart();
       }
-      // Confirmed via a captured real session: this used to reset
-      // unconditionally on ANY crossing, including a single ~16ms frame
-      // invisible in the 500ms-throttled debug log above. A momentary
-      // noise blip (background hum, a creak) would fully zero out the
-      // silence countdown every time it happened, so accumulated quiet
-      // could never reach silenceDurationMs and the turn would hang
-      // forever waiting for a "silence" that, from its perspective, kept
-      // getting interrupted. Now a blip only clears the countdown once
-      // it's persisted as long as real speech would have to, same bar as
-      // starting a turn in the first place.
-      if (this.speaking && now - this.aboveThresholdSince > this.opts.minSpeechDurationMs) {
+      // Evidence from a real captured session: legitimate resumed speech
+      // (natural short word-bursts, not a background noise blip) was
+      // failing to clear an in-progress silence countdown under the same
+      // 250ms bar used for starting a brand-new turn, because normal
+      // speech doesn't always sustain that long continuously between
+      // micro-pauses. That let an earlier pause's countdown keep ticking
+      // uninterrupted even while the person was actively talking, cutting
+      // off a genuine continuation ("...I think the total heal time" —
+      // "will be 15 days" never got captured). Uses the shorter
+      // minResumeDurationMs instead: still long enough to ignore a true
+      // single-frame noise spike, short enough to recognize real
+      // resumed speech.
+      if (this.speaking && now - this.aboveThresholdSince > this.opts.minResumeDurationMs) {
         this.silenceStart = null;
       }
     } else {
