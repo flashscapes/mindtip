@@ -286,7 +286,19 @@ class VoiceActivityDetector {
         this.opts.onDebug('Speech detected — recording turn');
         this.opts.onSpeechStart();
       }
-      this.silenceStart = null;
+      // Confirmed via a captured real session: this used to reset
+      // unconditionally on ANY crossing, including a single ~16ms frame
+      // invisible in the 500ms-throttled debug log above. A momentary
+      // noise blip (background hum, a creak) would fully zero out the
+      // silence countdown every time it happened, so accumulated quiet
+      // could never reach silenceDurationMs and the turn would hang
+      // forever waiting for a "silence" that, from its perspective, kept
+      // getting interrupted. Now a blip only clears the countdown once
+      // it's persisted as long as real speech would have to, same bar as
+      // starting a turn in the first place.
+      if (this.speaking && now - this.aboveThresholdSince > this.opts.minSpeechDurationMs) {
+        this.silenceStart = null;
+      }
     } else {
       this.aboveThresholdSince = null;
       if (this.speaking) {
