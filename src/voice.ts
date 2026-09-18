@@ -596,6 +596,17 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
         console.error('Speech playback failed:', err);
       }
       finishTurnAndReport(logDebug);
+      // EXPERIMENT: a captured log showed listening beginning the exact
+      // instant playback ended -- zero gap between the speaker finishing
+      // and the mic being asked to start capturing. Audio hardware
+      // switching from output to input isn't always instantaneous; this
+      // small pause gives that transition room to complete before the mic
+      // stream is requested, rather than requesting it mid-switch. Clearly
+      // labeled as an experiment, not a confirmed fix -- trivially
+      // reversible (this one line) if it doesn't help.
+      if (enabledRef.current) {
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
       startListening();
     },
     [startListening]
