@@ -41,7 +41,7 @@ const CARTESIA_VOICES: Record<string, CartesiaVoiceConfig> = {
     emotion: 'determined'
   },
   astronaut: {
-    voiceId: 'aa2cafe9-97ba-4052-ac3c-875000f95212', // Zander - Composed Advisor: "measured and calm presence"
+    voiceId: '23e9e50a-4ea2-447b-b589-df90dbb848a2', // Dallas - Fireside Friend: "kind male for inviting and authentic conversations"
     speed: 0.97,
     emotion: 'contemplative'
   },
