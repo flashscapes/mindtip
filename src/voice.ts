@@ -214,12 +214,37 @@ class VoiceActivityDetector {
   // degradation issue needs to be verified on an actual device before
   // shipping again, not iterated on blind.
   async start(): Promise<void> {
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // EXPERIMENT (not a permanent architectural change): explicit
+    // constraints instead of browser defaults. Evidence from a real
+    // captured session showed the mic reporting fully healthy
+    // (enabled/muted/readyState all normal) while actually capturing
+    // dramatically less signal by turn 7-8 of a conversation -- the same
+    // voice, the same room, producing spikes of 15-27 early on and never
+    // exceeding ~3 later. Leading hypothesis: the browser's own adaptive
+    // audio processing (automatic gain control, echo cancellation) reacts
+    // to the repeated cycle of the app speaking through the speakers
+    // immediately before each listen phase, and degrades real sensitivity
+    // over repeated cycles. This turns that adaptive processing off
+    // entirely rather than changing anything about how the app interprets
+    // whatever signal it receives.
+    this.stream = await navigator.mediaDevices.getUserMedia({
+      audio: { autoGainControl: false, echoCancellation: false, noiseSuppression: false }
+    });
     const track = this.stream.getAudioTracks()[0];
     this.opts.onDebug(
       `Mic stream acquired: ${this.stream.getAudioTracks().length} audio track(s), ` +
       `enabled=${track?.enabled}, muted=${track?.muted}, readyState=${track?.readyState}`
     );
+    // Constraints are requested, not guaranteed -- confirm what the
+    // browser actually negotiated before drawing any conclusion from the
+    // experiment above.
+    if (track) {
+      const settings = track.getSettings();
+      this.opts.onDebug(
+        `Actual mic settings: autoGainControl=${settings.autoGainControl}, ` +
+        `echoCancellation=${settings.echoCancellation}, noiseSuppression=${settings.noiseSuppression}`
+      );
+    }
     // enabled is script-controlled and this code never touches it, so it's
     // always true regardless of what's actually happening at the OS/
     // hardware level -- muted and readyState are the properties that would
