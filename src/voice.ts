@@ -9,6 +9,7 @@
 //                              hand text back to your app -> repeat
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { mark, markSegment, resetTurnTiming, finishTurnAndReport } from './voiceTiming';
 
 // ---------- Text-to-speech ----------
 
@@ -109,15 +110,24 @@ async function fetchSpeechBlob(sentence: string, voiceKey?: string): Promise<Blo
  *  of which fetch resolves first. */
 async function speakText(text: string, voiceKey?: string, onDebug?: (msg: string) => void): Promise<void> {
   const requestId = ++currentRequestId;
+  mark('sentence_ready');
   const sentences = splitIntoSentences(text);
   onDebug?.(`Requesting speech for ${sentences.length} sentence(s) in parallel…`);
 
-  const blobPromises = sentences.map(s =>
-    fetchSpeechBlob(s, voiceKey).catch(err => {
-      onDebug?.(`Segment fetch failed, skipping: ${err.message}`);
-      return null;
-    })
-  );
+  mark('tts_request_start');
+  const blobPromises = sentences.map((s, i) => {
+    markSegment(i, 'fetchStart');
+    return fetchSpeechBlob(s, voiceKey)
+      .then(blob => {
+        markSegment(i, 'fetchEnd');
+        if (i === 0) mark('tts_first_audio');
+        return blob;
+      })
+      .catch(err => {
+        onDebug?.(`Segment fetch failed, skipping: ${err.message}`);
+        return null;
+      });
+  });
 
   for (let i = 0; i < sentences.length; i++) {
     if (requestId !== currentRequestId) return; // superseded by a newer response — stop advancing
@@ -130,17 +140,22 @@ async function speakText(text: string, voiceKey?: string, onDebug?: (msg: string
     try {
       const audio = getSharedAudio();
       audio.src = url;
+      markSegment(i, 'playStart');
       await new Promise<void>((resolve, reject) => {
         const stuckTimeout = setTimeout(() => reject(new Error('Playback did not finish within 30s')), 30000);
         audio.onended = () => {
           clearTimeout(stuckTimeout);
+          markSegment(i, 'playEnd');
           resolve();
         };
         audio.onerror = () => {
           clearTimeout(stuckTimeout);
           reject(new Error(`Audio playback failed: ${audio.error?.message ?? 'unknown'}`));
         };
-        audio.play().then(() => onDebug?.(`Segment ${i + 1} playing`)).catch((err) => {
+        audio.play().then(() => {
+          if (i === 0) mark('playback_start');
+          onDebug?.(`Segment ${i + 1} playing`);
+        }).catch((err) => {
           clearTimeout(stuckTimeout);
           reject(err);
         });
@@ -336,6 +351,8 @@ class VoiceActivityDetector {
 
   private finishTurn(): void {
     if (!this.recorder) return;
+    resetTurnTiming();
+    mark('mic_turn_end');
     const durationMs = this.speechStartedAt !== null ? performance.now() - this.speechStartedAt : 0;
     this.opts.onDebug(`Turn finished: ${durationMs.toFixed(0)}ms of speech, ${this.chunks.length} chunk(s) recorded`);
     const recorder = this.recorder;
@@ -347,6 +364,7 @@ class VoiceActivityDetector {
       // against this one still finishing its teardown.
       await this.teardown();
       const blob = new Blob(chunks, { type: 'audio/webm' });
+      mark('capture_finalized');
       this.opts.onDebug(`Recorded blob: ${blob.size} bytes`);
       this.opts.onSpeechEnd(blob, durationMs);
     };
@@ -468,6 +486,7 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
         try {
+          mark('transcribe_request_start');
           const res = await fetch('/api/transcribe', { method: 'POST', body: blob, signal: controller.signal });
           if (!res.ok) {
             const body = await res.text().catch(() => '');
@@ -476,6 +495,7 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
             return;
           }
           const { text } = (await res.json()) as { text?: string };
+          mark('transcribe_response');
           logDebug(`Transcribed: "${text ?? '(empty)'}"`);
           if (text && text.trim()) {
             onUserSpeech(text.trim());
@@ -575,6 +595,7 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
         logDebug(`Error: ${err instanceof Error ? err.message : String(err)}`);
         console.error('Speech playback failed:', err);
       }
+      finishTurnAndReport(logDebug);
       startListening();
     },
     [startListening]

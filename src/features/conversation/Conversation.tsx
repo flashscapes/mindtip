@@ -6,6 +6,7 @@ import { LocalMemoryService } from '@/services/memory/MemoryService'
 import { createMemoryExtractor } from '@/services/memory'
 import { SafetyService } from '@/services/safety/SafetyService'
 import { useVoiceConversation } from '@/voice'
+import { mark } from '@/voiceTiming'
 import { ChatBubble } from './ChatBubble'
 import { Button } from '@/components/ui/Button'
 import { STORAGE_KEYS } from '@/lib/constants'
@@ -120,17 +121,30 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
   // under memory pressure) doesn't silently destroy it — App.tsx restores
   // from this on mount. Cleared only when the conversation ends
   // deliberately (see App.tsx's onExit), never on a reload.
+  //
+  // Debounced: messages updates on every single streamed chunk during an
+  // AI reply (potentially dozens of times in a few seconds), and this
+  // effect's actual work -- JSON.stringify the whole transcript, plus a
+  // full localStorage read/parse/write cycle in saveConversationRecord --
+  // was previously running in full on every one of those chunk updates.
+  // That's redundant work happening repeatedly during exactly the window
+  // where response latency matters most. The debounce collapses rapid
+  // successive changes into a single write once they settle (typically
+  // once per completed turn) with no change to what ends up persisted.
   useEffect(() => {
-    sessionStorage.setItem(STORAGE_KEYS.conversation, JSON.stringify(messages))
+    const timeoutId = setTimeout(() => {
+      sessionStorage.setItem(STORAGE_KEYS.conversation, JSON.stringify(messages))
 
-    // Separately, the durable per-character record used for true re-entry
-    // (see ConversationStore.ts) — this one is deliberately NOT cleared on
-    // exit, and holds the FULL history (whatever was already there from a
-    // prior sitting, plus this session's messages), not just what's
-    // currently visible on screen.
-    if (messages.length > 0) {
-      saveConversationRecord(conversationId, [...hiddenPriorMessagesRef.current, ...messages])
-    }
+      // Separately, the durable per-character record used for true re-entry
+      // (see ConversationStore.ts) — this one is deliberately NOT cleared on
+      // exit, and holds the FULL history (whatever was already there from a
+      // prior sitting, plus this session's messages), not just what's
+      // currently visible on screen.
+      if (messages.length > 0) {
+        saveConversationRecord(conversationId, [...hiddenPriorMessagesRef.current, ...messages])
+      }
+    }, 400)
+    return () => clearTimeout(timeoutId)
   }, [messages])
 
   if (import.meta.env.DEV) {
@@ -198,6 +212,7 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
 
     const handleChunk = (textSoFar: string) => {
       if (abandoned) return
+      mark('ai_first_chunk')
       if (!streamedMessageCreated) {
         streamedMessageCreated = true
         setIsThinking(false)
@@ -212,6 +227,7 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
 
     let response: Awaited<ReturnType<typeof ai.generateResponse>>
     voice.logDebug(`AI generation started (message length ${trimmed.length})`)
+    mark('ai_request_start')
     try {
       response = await withHardTimeout(
         ai.generateResponse(
@@ -273,6 +289,7 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
     setIsThinking(false)
     isGeneratingRef.current = false
     voice.logDebug(`AI generation succeeded (reply length ${response.replyText.length})`)
+    mark('ai_complete')
 
     // A one-time, low-stakes verbal courtesy: the moment the conversation
     // first reaches a reasonable depth, mention aloud that Emerging
@@ -332,6 +349,7 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
     let abandoned = false
     const handleChunk = (textSoFar: string) => {
       if (abandoned) return
+      mark('ai_first_chunk')
       if (!streamedMessageCreated) {
         streamedMessageCreated = true
         setIsThinking(false)
@@ -345,6 +363,7 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
     }
 
     try {
+      mark('ai_request_start')
       const response = await withHardTimeout(
         ai.generateResponse(
           {
@@ -360,6 +379,7 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
         45000,
         'Re-entry check-in'
       )
+      mark('ai_complete')
 
       if (streamedMessageCreated) {
         setMessagesAndRef(prev => prev.map(m => (m.id === assistantMessageId ? { ...m, content: response.replyText } : m)))
@@ -443,6 +463,18 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
 
   const handleExit = () => {
     voice.disableVoiceConversation()
+    // The persistence effect below debounces its writes (see its comment)
+    // to avoid redundant work on every streamed chunk -- but that means a
+    // pending write could still be sitting uncommitted when the user
+    // leaves. Flush the actual latest state immediately here rather than
+    // relying on the debounce timer, which the effect's cleanup would
+    // otherwise cancel on unmount, silently losing whatever hadn't been
+    // persisted yet.
+    const finalMessages = messagesRef.current
+    sessionStorage.setItem(STORAGE_KEYS.conversation, JSON.stringify(finalMessages))
+    if (finalMessages.length > 0) {
+      saveConversationRecord(conversationId, [...hiddenPriorMessagesRef.current, ...finalMessages])
+    }
     void extractMemoriesFromThisConversation()
     onExit()
   }
