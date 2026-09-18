@@ -528,7 +528,12 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
         // call, which has a real chance of recovering a working stream
         // even when the current one doesn't work, without needing to know
         // exactly why it didn't.
-        const NO_SPEECH_TIMEOUT_MS = 25000;
+        // A normal long pause (the person is thinking, stepped away
+        // briefly) must never be mistaken for a dead mic and trigger a
+        // teardown/retry -- explicitly required to tolerate at least 40s
+        // of silence before the user starts speaking. Set well above that
+        // with real margin, not just barely over it.
+        const NO_SPEECH_TIMEOUT_MS = 50000;
         const MAX_NO_SPEECH_RETRIES = 3;
         noSpeechTimeoutId = setTimeout(async () => {
           if (vadRef.current !== vad) return; // superseded by a newer listen cycle already
