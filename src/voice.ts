@@ -35,9 +35,37 @@ export function unlockAudio(): void {
 let currentRequestId = 0;
 
 function splitIntoSentences(text: string): string[] {
-  const matches = text.match(/[^.!?]+[.!?]+(\s+|$)/g);
-  if (!matches || matches.length === 0) return [text];
-  return matches.map(s => s.trim()).filter(Boolean);
+  // Allows closing quotes/asterisks/parens/brackets between the terminal
+  // punctuation and the whitespace-or-end check, e.g. a sentence ending in
+  // `hooked."*` (a markdown-italicized quote) — without this, the period
+  // there is immediately followed by `"*`, not whitespace or end-of-string,
+  // so the original regex silently failed to match that whole sentence at
+  // all. Confirmed directly: a real reported reply had its entire final
+  // sentence vanish this way, mid-conversation, with zero errors anywhere,
+  // because the code never knew that text existed in the first place.
+  const matches = text.match(/[^.!?]+[.!?]+["'*)\]]*(\s+|$)/g);
+  const sentences = (matches ?? []).map(s => s.trim()).filter(Boolean);
+
+  // Defense in depth, not just a patch for this one pattern: verify the
+  // matched sentences actually account for the input. If some other
+  // punctuation edge case (that we haven't hit yet) causes the regex to
+  // miss content again, recover whatever's left over as one more sentence
+  // instead of silently dropping it — this class of bug should not be
+  // able to recur even in a form not yet seen.
+  const strip = (s: string) => s.replace(/\s+/g, '');
+  const matchedLength = strip(sentences.join('')).length;
+  const originalLength = strip(text).length;
+  if (originalLength - matchedLength > 5) {
+    let consumed = 0;
+    for (const s of sentences) {
+      const idx = text.indexOf(s, consumed);
+      if (idx !== -1) consumed = idx + s.length;
+    }
+    const remainder = text.slice(consumed).trim();
+    if (remainder) sentences.push(remainder);
+  }
+
+  return sentences.length > 0 ? sentences : [text];
 }
 
 async function fetchSpeechBlob(sentence: string, voiceKey?: string): Promise<Blob> {
