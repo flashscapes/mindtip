@@ -88,6 +88,11 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
   }
   const [input, setInput] = useState('')
   const [isThinking, setIsThinking] = useState(false)
+  // Purely diagnostic, off by default -- lets the debug log (which already
+  // existed but was never visible anywhere, only accumulating silently)
+  // actually be seen and screenshotted when the voice failure happens,
+  // without needing a separate device to run Safari's remote inspector.
+  const [showDebug, setShowDebug] = useState(false)
   // Separate from isThinking on purpose: isThinking now only controls the
   // "Thinking…" text and clears the moment the first streamed chunk
   // arrives (once real content is visible, the placeholder text should go
@@ -206,6 +211,7 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
     }
 
     let response: Awaited<ReturnType<typeof ai.generateResponse>>
+    voice.logDebug(`AI generation started (message length ${trimmed.length})`)
     try {
       response = await withHardTimeout(
         ai.generateResponse(
@@ -225,6 +231,7 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
       abandoned = true
       setIsThinking(false)
       console.error('AI response generation failed:', err)
+      voice.logDebug(`⚠ AI generation FAILED: ${err instanceof Error ? err.message : String(err)}`)
 
       const partial = err instanceof StreamingResponseError ? err.partialText : undefined
       if (streamedMessageCreated && partial) {
@@ -265,6 +272,7 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
     }
     setIsThinking(false)
     isGeneratingRef.current = false
+    voice.logDebug(`AI generation succeeded (reply length ${response.replyText.length})`)
 
     // A one-time, low-stakes verbal courtesy: the moment the conversation
     // first reaches a reasonable depth, mention aloud that Emerging
@@ -525,9 +533,28 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
           >
             {voice.enabled ? (voice.state === 'idle' ? 'Voice on' : voice.state) : 'Voice off'}
           </button>
+          <button
+            onClick={() => setShowDebug(v => !v)}
+            className="text-[11px] opacity-40 hover:opacity-70 transition-opacity duration-300"
+            style={{ color: theme?.textColor ?? '#345350' }}
+            aria-label="Toggle voice diagnostic log"
+          >
+            {showDebug ? '▾' : '▸'}
+          </button>
           <button onClick={handleExit} className="text-[13px] transition-colors duration-300" style={{ color: theme?.accentColor ?? '#345350' }}>Close</button>
         </div>
       </header>
+
+      {showDebug && (
+        <div
+          className="relative z-20 max-h-40 overflow-y-auto px-3 py-2 text-[10px] leading-snug font-mono whitespace-pre-wrap"
+          style={{ background: 'rgba(0,0,0,0.75)', color: '#8FE0A0' }}
+        >
+          {voice.debugLog.length === 0
+            ? 'No voice activity logged yet this session.'
+            : voice.debugLog.map((line, i) => <div key={i}>{line}</div>)}
+        </div>
+      )}
 
       <div className="relative flex-1 overflow-y-auto px-8 py-10 flex flex-col gap-6">
         {messages.map(m => (

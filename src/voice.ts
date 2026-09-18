@@ -187,8 +187,24 @@ class VoiceActivityDetector {
   // shipping again, not iterated on blind.
   async start(): Promise<void> {
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    this.opts.onDebug(`Mic stream acquired: ${this.stream.getAudioTracks().length} audio track(s), enabled=${this.stream.getAudioTracks()[0]?.enabled}`);
+    const track = this.stream.getAudioTracks()[0];
+    this.opts.onDebug(
+      `Mic stream acquired: ${this.stream.getAudioTracks().length} audio track(s), ` +
+      `enabled=${track?.enabled}, muted=${track?.muted}, readyState=${track?.readyState}`
+    );
+    // enabled is script-controlled and this code never touches it, so it's
+    // always true regardless of what's actually happening at the OS/
+    // hardware level -- muted and readyState are the properties that would
+    // actually reveal a dead/degraded stream. Logging any change live,
+    // not just the state at acquisition, since the hypothesis is that a
+    // stream can go bad *during* a session, not only fail to start.
+    if (track) {
+      track.onmute = () => this.opts.onDebug(`⚠ Mic track went MUTED mid-stream (readyState=${track.readyState})`);
+      track.onunmute = () => this.opts.onDebug(`Mic track unmuted (readyState=${track.readyState})`);
+      track.onended = () => this.opts.onDebug(`⚠ Mic track ENDED unexpectedly (readyState=${track.readyState})`);
+    }
     this.audioCtx = new AudioContext();
+    this.opts.onDebug(`AudioContext created: state=${this.audioCtx.state}`);
     this.sourceNode = this.audioCtx.createMediaStreamSource(this.stream);
     this.analyser = this.audioCtx.createAnalyser();
     this.analyser.fftSize = 512;
@@ -325,15 +341,29 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const logDebug = useCallback((msg: string) => {
     const t = new Date().toISOString().slice(11, 19);
-    setDebugLog(prev => [...prev.slice(-24), `${t} ${msg}`]);
+    const line = `${t} ${msg}`;
+    // This log stream already exists at nearly every state transition in
+    // this file, but until now it only fed an internal React state array
+    // that nothing ever rendered or read -- it was invisible everywhere,
+    // including here in console.log. That's the actual gap: not missing
+    // instrumentation, but no way to access what was already being
+    // captured. Fixing that first, before adding anything new.
+    console.log('[voice]', line);
+    setDebugLog(prev => [...prev.slice(-59), line]);
   }, []);
   const enabledRef = useRef(false);
+  // Purely diagnostic: lets every log line below be tied to a specific
+  // exchange number, so a failure can be directly correlated against the
+  // reported "works for 8-10 exchanges, then stops" pattern instead of
+  // just guessing at which turn things went wrong.
+  const turnCountRef = useRef(0);
   const vadRef = useRef<VoiceActivityDetector | null>(null);
 
   const startListening = useCallback((isRetry = false, noSpeechRetryCount = 0) => {
     if (!enabledRef.current) return;
     setState('listening');
-    logDebug('Listening for your voice…');
+    if (!isRetry && noSpeechRetryCount === 0) turnCountRef.current += 1;
+    logDebug(`Listening for your voice… (turn #${turnCountRef.current}${isRetry ? ', mic retry' : ''}${noSpeechRetryCount > 0 ? `, no-speech retry ${noSpeechRetryCount}` : ''})`);
 
     let noSpeechTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -493,5 +523,5 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     };
   }, []);
 
-  return { state, enabled, debugLog, enableVoiceConversation, disableVoiceConversation, speakResponse, startListening };
+  return { state, enabled, debugLog, logDebug, enableVoiceConversation, disableVoiceConversation, speakResponse, startListening };
 }
