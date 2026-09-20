@@ -1,12 +1,33 @@
 // DESTINATION: src/voice.ts
 //
 // Everything client-side for the hands-free voice loop, in one file:
-//   - speakText()              text -> speech via /api/speak, plays it
-//   - VoiceActivityDetector    watches the mic, hands back a clip once
-//                              the user starts then stops talking
+//   - speakText()         text -> speech via /api/speak, plays it
+//   - VoiceSession        owns ONE persistent mic/AudioContext/recorder
+//                          for the whole conversation and detects turns
+//                          within it (see the big comment above the class)
 //   - useVoiceConversation()   the React hook wiring both into a loop:
 //                              speak -> auto-listen -> transcribe ->
 //                              hand text back to your app -> repeat
+//
+// ARCHITECTURE (rewritten from a per-turn design):
+// Previously, every single turn constructed a brand-new mic stream,
+// AudioContext, analyser, and MediaRecorder, then tore the whole thing
+// down again once the turn finished -- "start a new microphone session"
+// was, in effect, a synonym for "start a new turn." That meant every
+// turn boundary was a fresh opportunity for mic-permission races,
+// AudioContext-suspend/resume quirks, and an unguarded Promise.race
+// (mic acquisition vs. a timeout) to leave something running that
+// nothing would ever stop.
+//
+// Now there is ONE VoiceSession per conversation. Its mic stream,
+// AudioContext, and MediaRecorder are created once (init()) and stay
+// alive until voice is disabled. A "turn" is just resumeListening() /
+// pauseListening() flipping a flag and resetting small per-turn buffers
+// -- the underlying hardware pipeline is never rebuilt between turns.
+// The one remaining rebuild path (a confirmed-dead mic track) is now an
+// explicit, rare recovery action, not routine per-turn behavior, and is
+// guarded against the same orphaned-instance race with a generation
+// counter (see attemptInit() below).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { mark, markSegment, resetTurnTiming, finishTurnAndReport } from './voiceTiming';
@@ -176,143 +197,128 @@ async function speakText(text: string, voiceKey?: string, onDebug?: (msg: string
   }
 }
 
-// ---------- Voice activity detection ----------
+// ---------- Voice session (persistent mic/AudioContext + turn detection) ----------
 
-interface VadOptions {
+interface VoiceSessionOptions {
   onSpeechStart?: () => void;
   onSpeechEnd?: (audioBlob: Blob, durationMs: number) => void;
   onDebug?: (msg: string) => void;
-  silenceThreshold?: number; // multiplier applied to the adaptively-tracked noise floor -- a reading must exceed (noise floor * this) to count as "not quiet". Was previously a fixed absolute RMS amplitude; redefined as a ratio because a fixed constant can't stay correct if the floor-to-speech gap itself shifts turn to turn (see the noiseFloor fields on VoiceActivityDetector).
+  silenceThreshold?: number; // amplitude (0-128 scale) below which is "quiet"
   silenceDurationMs?: number; // how long quiet must persist before ending the turn
   minSpeechDurationMs?: number; // how long amplitude must stay elevated before it counts as real speech, not a blip
   minResumeDurationMs?: number; // shorter bar for recognizing speech has resumed mid-turn (interrupting an in-progress silence countdown) -- natural speech comes in short bursts between words, so this should be lower than the bar for starting a brand-new turn from silence, where being more conservative against false starts matters more
-  turnLabel?: string; // diagnostic-only: identifies which turn this instance belongs to in [diag] log lines. No effect on any behavior.
 }
 
-
-
-class VoiceActivityDetector {
+/**
+ * Owns ONE microphone stream, ONE AudioContext, and ONE continuously-running
+ * MediaRecorder for the entire lifetime of a voice conversation — not one
+ * per turn (see the file-level comment above for why this changed).
+ *
+ * A turn is a lightweight state change: resumeListening() resets the
+ * per-turn buffers and starts reacting to audio again; pauseListening()
+ * stops reacting (AI is speaking, or a turn is being transcribed) without
+ * releasing anything. The mic stays open and the AudioContext stays alive
+ * the whole time.
+ *
+ * A previous version of this file used a persistent AudioContext and
+ * reverted it after a real regression: the context could end up
+ * 'suspended' during the TTS-playback phase, and resuming it from code not
+ * directly inside a user-gesture handler is exactly the kind of thing
+ * Safari can silently refuse — which would leave the shared context
+ * permanently suspended and no turn ever detected again. Two things are
+ * different this time, specifically to address that: (1) resumeListening()
+ * re-checks and re-attempts resume() every single time we return to
+ * LISTENING, not just once at startup, so a suspend that happens mid-TTS
+ * gets a fresh resume attempt at the very next turn instead of being
+ * assumed to have worked; (2) isHealthy() + the hook's watchdog give an
+ * explicit, bounded escape hatch (a full reinit) if the mic/context is ever
+ * confirmed stuck, instead of silently listening into a dead pipeline
+ * forever. This has NOT been verified on an actual stuck-Safari-context
+ * device yet — flag that specifically if it recurs.
+ */
+class VoiceSession {
   private stream: MediaStream | null = null;
   private audioCtx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private recorder: MediaRecorder | null = null;
+
   private chunks: Blob[] = [];
   // Small rolling buffer of chunks recorded while speech has not yet been
-  // confirmed (see start()/monitor() for how this is filled and consumed).
+  // confirmed for the CURRENT turn — see resumeListening()/monitor() for
+  // how it's filled, cleared, and consumed. Same pre-roll mechanism as
+  // before; only its container (one long-lived session instead of a fresh
+  // object per turn) changed.
   private preRollChunks: Blob[] = [];
   private static readonly TIMESLICE_MS = 100;
   private static readonly PRE_ROLL_CHUNK_COUNT = 3; // ~300ms at 100ms/chunk
-  // Adaptive noise-floor tracking, replacing a fixed absolute RMS
-  // threshold. Real captured evidence showed the ambient noise floor
-  // staying flat turn-to-turn (~0.6-0.8) while genuine speech-attempt
-  // levels collapsed well below what a fixed threshold of 5 requires --
-  // a signal-relative-to-noise-floor problem, not a threshold-tuning
-  // problem, so a fixed constant can't be "correct" for every turn. This
-  // tracks a running estimate of the floor (updated only while not yet
-  // speaking, so real speech is never folded into its own baseline) and
-  // requires the signal to exceed that floor by a ratio (see monitor()),
-  // the same principle real VAD/noise-gate designs use.
-  private static readonly NOISE_FLOOR_EMA_ALPHA = 0.05;
-  private static readonly MIN_NOISE_FLOOR = 0.3; // guards against a hair-trigger threshold if the floor estimate ever collapses near 0
-  private static readonly MAX_NOISE_FLOOR = 4; // guards against a loud room inflating the floor and making detection unresponsive
-  private static readonly MIN_EFFECTIVE_THRESHOLD = 1.5; // absolute safety net: never trigger on background this quiet regardless of the adaptive estimate
-  private noiseFloor = 1; // seeded near the low end of typical observed background, before the EMA has converged on this turn's real value
+
+  // Whether turn-detection is currently "on". True only while we actually
+  // want to be listening for the user; false while a turn is being
+  // processed or the AI is speaking. This is the ONLY thing that changes
+  // between turns — the mic/AudioContext/recorder are untouched either way.
+  private active = false;
   private speaking = false;
   private aboveThresholdSince: number | null = null;
   private speechStartedAt: number | null = null;
   private silenceStart: number | null = null;
   private rafId: number | null = null;
   private lastDebugAt = 0;
-  private opts: Required<VadOptions>;
 
-  constructor(opts: VadOptions = {}) {
+  // TEMPORARY DIAGNOSTIC ONLY — counts frame-level above/below-threshold
+  // behavior within each ~500ms debug-log window, to verify whether brief
+  // dips below silenceThreshold are what's preventing minSpeechDurationMs
+  // from ever being reached. Remove once the VAD diagnosis is confirmed.
+  private vadWindowFrames = 0;
+  private vadWindowAbove = 0;
+  private vadWindowBelow = 0;
+  private vadCurrentRunFrames = 0;
+  private vadLongestRunFrames = 0;
+  private vadResetOccurred = false;
+  private opts: Required<VoiceSessionOptions>;
+
+  constructor(opts: VoiceSessionOptions = {}) {
     this.opts = {
       onSpeechStart: opts.onSpeechStart ?? (() => {}),
       onSpeechEnd: opts.onSpeechEnd ?? (() => {}),
       onDebug: opts.onDebug ?? (() => {}),
-      // Default changed from a fixed absolute value of 5 to a ratio of
-      // 2.5 -- see the VadOptions comment. Chosen from real observed
-      // numbers: a ~0.7 noise floor and failed speech-attempt readings of
-      // 2.3-3.1 (a ~3-4.4x ratio) -- 2.5x clears both with margin while
-      // staying clearly above the steady-state floor.
-      silenceThreshold: opts.silenceThreshold ?? 2.5,
+      silenceThreshold: opts.silenceThreshold ?? 5,
       silenceDurationMs: opts.silenceDurationMs ?? 3200,
       minSpeechDurationMs: opts.minSpeechDurationMs ?? 250,
       minResumeDurationMs: opts.minResumeDurationMs ?? 100,
-      turnLabel: opts.turnLabel ?? '',
     };
   }
 
-  // Reverted from a shared/persistent AudioContext back to one created
-  // fresh per turn. The persistent-context version was meant to fix a
-  // documented iOS degradation pattern, but introduced a worse regression:
-  // a context can end up 'suspended' during the "speaking" (TTS) phase,
-  // and resuming an AudioContext from code that isn't directly inside a
-  // user gesture handler is exactly the kind of thing Safari can silently
-  // refuse -- which would leave the shared context permanently suspended,
-  // meaning the analyser never sees real audio again and no turn is ever
-  // detected as finished. That's total failure, strictly worse than the
-  // intermittent degradation it was meant to address. This per-turn
-  // approach is the known-working baseline; a real fix for the iOS
-  // degradation issue needs to be verified on an actual device before
-  // shipping again, not iterated on blind.
-  async start(): Promise<void> {
-    // Reverted an earlier experiment here that explicitly disabled
-    // autoGainControl/echoCancellation/noiseSuppression. Evidence showed
-    // it made things worse, not better: a brand-new conversation's very
-    // first turn (not turn 7-8) came in with mic levels of 0.0-1.0, with
+  /** Acquire the mic and stand up the audio pipeline ONCE for the whole
+   *  conversation. Only called again (via a fresh instance) if isHealthy()
+   *  later reports a confirmed-dead stream. */
+  async init(): Promise<void> {
+    this.opts.onDebug('[session] init() beginning');
+    // Plain default constraints (no autoGainControl/echoCancellation/
+    // noiseSuppression overrides). An earlier experiment disabled these
+    // explicitly and made things measurably worse — a brand-new
+    // conversation's very first turn came in at mic levels of 0.0-1.0 with
     // the disabled settings confirmed applied via getSettings(). Automatic
-    // gain control's actual job is boosting quiet input to a usable
-    // level -- disabling it likely removed something that was helping
-    // normal speech register at all, rather than fixing the later-session
-    // degradation it was meant to address. Back to browser defaults while
-    // the real cause is still unknown.
-    this.opts.onDebug(`[diag] vad.start() beginning (turn #${this.opts.turnLabel})`);
-    this.opts.onDebug(`[diag] getUserMedia() attempt (turn #${this.opts.turnLabel})`);
-    try {
-      // Reverted echoCancellation:false -- a real captured test showed it
-      // breaking turn #1 outright (the one turn that had been reliable in
-      // every prior session), with mic levels never rising above ~1.4 the
-      // entire time, a different and worse failure mode than anything seen
-      // before. Whatever the exact mechanism, disabling it made things
-      // worse, not better, so it's reverted back to the browser default
-      // rather than left as a regression. The adaptive noise-floor
-      // threshold below is unaffected by this and stays in place -- it was
-      // never actually tested against real speech in that run (nothing in
-      // the log rose high enough to evaluate it either way).
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err) {
-      this.opts.onDebug(`[diag] getUserMedia() FAILED (turn #${this.opts.turnLabel}): ${err instanceof Error ? err.message : String(err)}`);
-      throw err;
-    }
-    this.opts.onDebug(`[diag] getUserMedia() succeeded (turn #${this.opts.turnLabel})`);
+    // gain control's actual job is boosting quiet input to a usable level;
+    // disabling it removed something that was helping normal speech
+    // register at all.
+    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const track = this.stream.getAudioTracks()[0];
     this.opts.onDebug(
       `Mic stream acquired: ${this.stream.getAudioTracks().length} audio track(s), ` +
       `enabled=${track?.enabled}, muted=${track?.muted}, readyState=${track?.readyState}`
     );
-    // Constraints are requested, not guaranteed -- confirm what the
-    // browser actually negotiated before drawing any conclusion from the
-    // experiment above.
     if (track) {
       const settings = track.getSettings();
       this.opts.onDebug(
         `Actual mic settings: autoGainControl=${settings.autoGainControl}, ` +
         `echoCancellation=${settings.echoCancellation}, noiseSuppression=${settings.noiseSuppression}`
       );
-    }
-    // enabled is script-controlled and this code never touches it, so it's
-    // always true regardless of what's actually happening at the OS/
-    // hardware level -- muted and readyState are the properties that would
-    // actually reveal a dead/degraded stream. Logging any change live,
-    // not just the state at acquisition, since the hypothesis is that a
-    // stream can go bad *during* a session, not only fail to start.
-    if (track) {
-      track.onmute = () => this.opts.onDebug(`⚠ Mic track went MUTED mid-stream (readyState=${track.readyState})`);
+      track.onmute = () => this.opts.onDebug(`⚠ Mic track went MUTED mid-session (readyState=${track.readyState})`);
       track.onunmute = () => this.opts.onDebug(`Mic track unmuted (readyState=${track.readyState})`);
       track.onended = () => this.opts.onDebug(`⚠ Mic track ENDED unexpectedly (readyState=${track.readyState})`);
     }
+
     this.audioCtx = new AudioContext();
     this.opts.onDebug(`AudioContext created: state=${this.audioCtx.state}`);
     if (this.audioCtx.state === 'suspended') {
@@ -329,41 +335,78 @@ class VoiceActivityDetector {
     this.recorder = new MediaRecorder(this.stream, mimeType ? { mimeType } : undefined);
     this.chunks = [];
     this.preRollChunks = [];
-    // The recorder now runs continuously from turn-start (chunked every
-    // TIMESLICE_MS), instead of only starting once speech is confirmed.
-    // While speech has NOT yet been confirmed (this.speaking === false),
-    // each small chunk goes into a bounded rolling pre-roll buffer instead
-    // of the real transcript chunks -- capped at PRE_ROLL_CHUNK_COUNT
-    // (~300ms), old chunks drop off the front as new ones arrive. The
-    // moment speech IS confirmed (see monitor()), that buffered pre-roll is
-    // spliced onto the front of `chunks` so the ~250ms confirmation window
-    // that used to be lost entirely is recovered, without ever letting long
-    // unconfirmed silence accumulate into the recording that gets sent to
-    // Whisper -- only the last ~300ms before confirmation is ever kept.
     this.recorder.ondataavailable = (e) => {
-      if (e.data.size === 0) return;
+      // Dropped outright while not actively listening (AI speaking /
+      // processing a turn) — belt-and-suspenders alongside pause()/
+      // resume() below, since MediaRecorder.pause() support has had rough
+      // edges on some WebKit versions historically.
+      if (e.data.size === 0 || !this.active) return;
       if (this.speaking) {
         this.chunks.push(e.data);
       } else {
         this.preRollChunks.push(e.data);
-        if (this.preRollChunks.length > VoiceActivityDetector.PRE_ROLL_CHUNK_COUNT) {
+        if (this.preRollChunks.length > VoiceSession.PRE_ROLL_CHUNK_COUNT) {
           this.preRollChunks.shift();
         }
       }
     };
+    this.recorder.start(VoiceSession.TIMESLICE_MS);
+    this.active = false; // caller explicitly calls resumeListening() to begin the first turn
+    this.lastDebugAt = 0;
+    this.rafId = requestAnimationFrame(this.monitor);
+    this.opts.onDebug('[session] init() completed — persistent mic/AudioContext/recorder now live for the whole conversation');
+  }
+
+  /** True if the underlying mic track still looks alive. Used by the
+   *  hook's watchdog to tell a genuinely dead stream apart from the user
+   *  just taking a long pause to think — the latter must never trigger a
+   *  rebuild. */
+  isHealthy(): boolean {
+    const track = this.stream?.getAudioTracks()[0];
+    return !!track && track.readyState === 'live' && !track.muted;
+  }
+
+  /** Begin/resume actively listening for the next turn. Resets per-turn
+   *  state but does NOT touch the mic/AudioContext/recorder — they stay
+   *  alive for the whole conversation. */
+  resumeListening(): void {
+    this.chunks = [];
+    this.preRollChunks = [];
     this.speaking = false;
     this.aboveThresholdSince = null;
     this.speechStartedAt = null;
     this.silenceStart = null;
-    this.noiseFloor = 1; // fresh instance per turn already guarantees this, but explicit for clarity
-    this.recorder.start(VoiceActivityDetector.TIMESLICE_MS);
-    this.lastDebugAt = 0;
-    this.monitor();
-    this.opts.onDebug(`[diag] vad.start() completed (turn #${this.opts.turnLabel})`);
+    this.active = true;
+    if (this.audioCtx?.state === 'suspended') {
+      void this.audioCtx.resume();
+    }
+    try {
+      if (this.recorder && this.recorder.state === 'paused') this.recorder.resume();
+    } catch {
+      // Not fatal — the `active` guard in ondataavailable/monitor keeps
+      // behavior correct even if pause()/resume() itself is flaky here.
+    }
+  }
+
+  /** Stop reacting to audio (AI is speaking, or a turn is being
+   *  processed) without tearing anything down. */
+  pauseListening(): void {
+    this.active = false;
+    try {
+      if (this.recorder && this.recorder.state === 'recording') this.recorder.pause();
+    } catch {
+      // See resumeListening() — the active flag covers us either way.
+    }
   }
 
   private monitor = (): void => {
-    if (!this.analyser) return;
+    if (!this.analyser) return; // session torn down
+    if (!this.active) {
+      // Keep the loop alive (so we react instantly once resumeListening()
+      // flips `active` back on) without doing any detection work meanwhile.
+      this.rafId = requestAnimationFrame(this.monitor);
+      return;
+    }
     const data = new Uint8Array(this.analyser.frequencyBinCount);
     this.analyser.getByteTimeDomainData(data);
 
@@ -375,32 +418,39 @@ class VoiceActivityDetector {
     const rms = Math.sqrt(sumSquares / data.length);
     const now = performance.now();
 
-    // Update the running noise-floor estimate -- only while not yet
-    // speaking, so genuine speech is never folded into its own baseline
-    // (which would make the floor chase the signal it's supposed to be
-    // measured against). A slow EMA (alpha 0.05) rather than a one-shot
-    // calibration window: converges within roughly a second of readings
-    // without ever gating detection off entirely, so this can't reintroduce
-    // the clipped-first-word problem the pre-roll buffer fixed.
-    if (!this.speaking) {
-      this.noiseFloor += VoiceActivityDetector.NOISE_FLOOR_EMA_ALPHA * (rms - this.noiseFloor);
-      this.noiseFloor = Math.min(
-        VoiceActivityDetector.MAX_NOISE_FLOOR,
-        Math.max(VoiceActivityDetector.MIN_NOISE_FLOOR, this.noiseFloor)
-      );
+    // TEMPORARY DIAGNOSTIC ONLY — see field comments above.
+    this.vadWindowFrames++;
+    if (rms > this.opts.silenceThreshold) {
+      this.vadWindowAbove++;
+      this.vadCurrentRunFrames++;
+      if (this.vadCurrentRunFrames > this.vadLongestRunFrames) {
+        this.vadLongestRunFrames = this.vadCurrentRunFrames;
+      }
+    } else {
+      this.vadWindowBelow++;
+      this.vadCurrentRunFrames = 0;
     }
-    const effectiveThreshold = Math.max(
-      VoiceActivityDetector.MIN_EFFECTIVE_THRESHOLD,
-      this.noiseFloor * this.opts.silenceThreshold
-    );
 
     // Throttled so we can see live mic levels without flooding — every ~500ms.
     if (now - this.lastDebugAt > 500) {
+      const windowElapsedMs = this.lastDebugAt === 0 ? 500 : now - this.lastDebugAt;
       this.lastDebugAt = now;
-      this.opts.onDebug(`Mic level: ${rms.toFixed(1)} (floor ${this.noiseFloor.toFixed(1)}, effective threshold ${effectiveThreshold.toFixed(1)}), speaking=${this.speaking}`);
+      this.opts.onDebug(`Mic level: ${rms.toFixed(1)} (threshold ${this.opts.silenceThreshold}), speaking=${this.speaking}`);
+      // TEMPORARY DIAGNOSTIC ONLY — remove once VAD diagnosis is confirmed.
+      const frameMs = this.vadWindowFrames > 0 ? windowElapsedMs / this.vadWindowFrames : 0;
+      const longestRunMs = Math.round(this.vadLongestRunFrames * frameMs);
+      this.opts.onDebug(
+        `VAD window: ${this.vadWindowFrames} frames | above: ${this.vadWindowAbove} | below: ${this.vadWindowBelow} | ` +
+        `longest above run: ${longestRunMs}ms | threshold: ${this.opts.silenceThreshold} | reset=${this.vadResetOccurred} | speaking=${this.speaking}`
+      );
+      this.vadWindowFrames = 0;
+      this.vadWindowAbove = 0;
+      this.vadWindowBelow = 0;
+      this.vadLongestRunFrames = 0;
+      this.vadResetOccurred = false;
     }
 
-    if (rms > effectiveThreshold) {
+    if (rms > this.opts.silenceThreshold) {
       if (this.aboveThresholdSince === null) {
         this.aboveThresholdSince = now;
       }
@@ -411,32 +461,25 @@ class VoiceActivityDetector {
         this.speaking = true;
         this.speechStartedAt = this.aboveThresholdSince;
         this.opts.onDebug(`Speech detected — recording turn (with ${this.preRollChunks.length} pre-roll chunk(s))`);
-        // The recorder has been running continuously since start() (see the
-        // note there). Splice in the buffered pre-roll audio so the
-        // confirmation window -- the actual onset of the first word -- is
-        // part of the recording, not lost. This only changes which bucket
-        // new chunks land in going forward (ondataavailable checks
-        // this.speaking).
         this.chunks.push(...this.preRollChunks);
         this.preRollChunks = [];
         this.opts.onSpeechStart();
       }
-      // Evidence from a real captured session: legitimate resumed speech
-      // (natural short word-bursts, not a background noise blip) was
-      // failing to clear an in-progress silence countdown under the same
-      // 250ms bar used for starting a brand-new turn, because normal
-      // speech doesn't always sustain that long continuously between
-      // micro-pauses. That let an earlier pause's countdown keep ticking
-      // uninterrupted even while the person was actively talking, cutting
-      // off a genuine continuation ("...I think the total heal time" —
-      // "will be 15 days" never got captured). Uses the shorter
-      // minResumeDurationMs instead: still long enough to ignore a true
-      // single-frame noise spike, short enough to recognize real
-      // resumed speech.
+      // Legitimate resumed speech (natural short word-bursts, not a
+      // background-noise blip) uses a shorter bar to clear an in-progress
+      // silence countdown than the bar for starting a brand-new turn —
+      // normal speech doesn't always sustain 250ms continuously between
+      // micro-pauses, and requiring that let an earlier pause's countdown
+      // keep ticking uninterrupted even while the person was actively
+      // talking, cutting off a genuine continuation.
       if (this.speaking && now - this.aboveThresholdSince > this.opts.minResumeDurationMs) {
         this.silenceStart = null;
       }
     } else {
+      // TEMPORARY DIAGNOSTIC ONLY — a reset only "counts" if there was an
+      // in-progress above-threshold streak being cut short, not just
+      // another silent frame while already silent.
+      if (this.aboveThresholdSince !== null) this.vadResetOccurred = true;
       this.aboveThresholdSince = null;
       if (this.speaking) {
         if (this.silenceStart === null) {
@@ -451,43 +494,46 @@ class VoiceActivityDetector {
     this.rafId = requestAnimationFrame(this.monitor);
   };
 
+  /** Ends the current turn and hands the recorded clip back — WITHOUT
+   *  stopping the recorder/AudioContext/mic. The old design had to stop()
+   *  the MediaRecorder here and tear down and rebuild the entire pipeline
+   *  for the next turn; here the recorder is simply paused (still holding
+   *  the device) and the next turn reuses it directly via
+   *  resumeListening(). No async teardown, so there's no window for the
+   *  next turn to race against this one still finishing its cleanup. */
   private finishTurn(): void {
-    if (!this.recorder) return;
     resetTurnTiming();
     mark('mic_turn_end');
     const durationMs = this.speechStartedAt !== null ? performance.now() - this.speechStartedAt : 0;
-    this.opts.onDebug(`Turn finished: ${durationMs.toFixed(0)}ms of speech, ${this.chunks.length} chunk(s) recorded`);
-    const recorder = this.recorder;
     const chunks = this.chunks;
-    recorder.onstop = async () => {
-      // Fully release this turn's mic stream and AudioContext before
-      // handing off — onSpeechEnd may itself trigger a fresh listen cycle,
-      // and that next cycle's getUserMedia/AudioContext should never race
-      // against this one still finishing its teardown.
-      await this.teardown();
-      const blob = new Blob(chunks, { type: 'audio/webm' });
-      mark('capture_finalized');
-      this.opts.onDebug(`Recorded blob: ${blob.size} bytes`);
-      this.opts.onSpeechEnd(blob, durationMs);
-    };
-    recorder.stop();
+    this.opts.onDebug(`Turn finished: ${durationMs.toFixed(0)}ms of speech, ${chunks.length} chunk(s) recorded`);
+    this.pauseListening();
+    const blob = new Blob(chunks, { type: 'audio/webm' });
+    mark('capture_finalized');
+    this.opts.onDebug(`Recorded blob: ${blob.size} bytes`);
+    this.opts.onSpeechEnd(blob, durationMs);
   }
 
-  stop(): Promise<void> {
-    return this.teardown();
-  }
-
-  private async teardown(): Promise<void> {
-    this.opts.onDebug(`[diag] teardown() beginning (turn #${this.opts.turnLabel})`);
+  /** Fully releases the mic/AudioContext/recorder. Call once, when voice
+   *  is disabled or the component unmounts — or when reinitializing after
+   *  a confirmed-unhealthy stream (see the hook's watchdog). */
+  async teardown(): Promise<void> {
+    this.opts.onDebug('[session] teardown() beginning');
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
     this.rafId = null;
+    this.active = false;
+    try {
+      if (this.recorder && this.recorder.state !== 'inactive') this.recorder.stop();
+    } catch {
+      // Already stopped/inactive — nothing to do.
+    }
     this.stream?.getTracks().forEach((t) => t.stop());
     this.sourceNode?.disconnect();
     this.analyser?.disconnect();
     // AudioContext.close() is genuinely async — awaiting it (instead of
-    // firing and forgetting) means a fresh AudioContext for the next turn
-    // never gets created before this one has actually finished releasing
-    // its resources, which is a real risk on constrained mobile hardware.
+    // firing and forgetting) means a fresh AudioContext for a reinit never
+    // gets created before this one has actually finished releasing its
+    // resources, which is a real risk on constrained mobile hardware.
     try {
       await this.audioCtx?.close();
     } catch {
@@ -498,7 +544,7 @@ class VoiceActivityDetector {
     this.analyser = null;
     this.audioCtx = null;
     this.recorder = null;
-    this.opts.onDebug(`[diag] teardown() completed (turn #${this.opts.turnLabel})`);
+    this.opts.onDebug('[session] teardown() completed');
   }
 }
 
@@ -546,155 +592,218 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
       }, 1000);
     }
   }, []);
+
   const enabledRef = useRef(false);
   // Purely diagnostic: lets every log line below be tied to a specific
-  // exchange number, so a failure can be directly correlated against the
-  // reported "works for 8-10 exchanges, then stops" pattern instead of
-  // just guessing at which turn things went wrong.
+  // exchange number, so a failure can be directly correlated against a
+  // reported "works for N exchanges, then stops" pattern.
   const turnCountRef = useRef(0);
-  const vadRef = useRef<VoiceActivityDetector | null>(null);
+  const sessionRef = useRef<VoiceSession | null>(null);
+  const noSpeechTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped on every enable/disable/reinit. A pending init() that resolves
+  // after it's been superseded checks this to know it's now orphaned (see
+  // attemptInit()) instead of silently adopting itself as the live session.
+  const initGenerationRef = useRef(0);
 
-  const startListening = useCallback((isRetry = false, noSpeechRetryCount = 0) => {
-    if (!enabledRef.current) return;
-    setState('listening');
-    if (!isRetry && noSpeechRetryCount === 0) turnCountRef.current += 1;
-    logDebug(`Listening for your voice… (turn #${turnCountRef.current}${isRetry ? ', mic retry' : ''}${noSpeechRetryCount > 0 ? `, no-speech retry ${noSpeechRetryCount}` : ''})`);
+  // The persistent VoiceSession's callbacks are wired up ONCE, when the
+  // session is created — unlike the old per-turn design, they are not
+  // rebuilt every turn. Routing onUserSpeech through a ref (kept current
+  // via this effect) means every turn calls whatever `onUserSpeech` the
+  // caller most recently passed in, instead of freezing on whichever
+  // version existed at the moment voice was enabled.
+  const onUserSpeechRef = useRef(onUserSpeech);
+  useEffect(() => {
+    onUserSpeechRef.current = onUserSpeech;
+  }, [onUserSpeech]);
 
-    let noSpeechTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  const MIN_CLIP_MS = 400;
+  // A normal long pause (the person is thinking, stepped away briefly)
+  // must never be mistaken for a dead mic — required to tolerate at least
+  // 40s of silence before the user starts speaking. Set well above that
+  // with real margin, not just barely over it.
+  const NO_SPEECH_TIMEOUT_MS = 50000;
+  const MAX_REINIT_ATTEMPTS = 3;
+  const MIC_INIT_TIMEOUT_MS = 10000;
 
-    const vad = new VoiceActivityDetector({
-      onDebug: logDebug,
-      turnLabel: String(turnCountRef.current),
-      onSpeechStart: () => {
-        // Real speech is happening — let the normal turn-ending logic
-        // (silence after speech) take over instead of the watchdog.
-        if (noSpeechTimeoutId !== null) {
-          clearTimeout(noSpeechTimeoutId);
-          noSpeechTimeoutId = null;
+  const clearWatchdog = () => {
+    if (noSpeechTimerRef.current !== null) {
+      clearTimeout(noSpeechTimerRef.current);
+      noSpeechTimerRef.current = null;
+    }
+  };
+
+  /** Runs session.init(), bounded by a timeout, WITHOUT ever leaving an
+   *  orphaned mic stream / AudioContext running if the timeout wins.
+   *  Promise.race famously does not cancel its loser — the previous
+   *  per-turn design raced mic acquisition against a timeout on every
+   *  single turn and never followed up on a late winner, which is a real,
+   *  provable leak vector (the diagnostic evidence gathered so far just
+   *  hadn't caught it in the act). Fixed here by always attaching a
+   *  completion handler to the real init() promise, generation-gated: if
+   *  it finishes after something else has already superseded it, it tears
+   *  itself down instead of being left running with nothing left to ever
+   *  stop it. Because there is now only ONE init() per conversation
+   *  (instead of one per turn), this exact race is also far less likely to
+   *  matter in practice — but it's now closed structurally, not just
+   *  shrunk. */
+  const attemptInit = (session: VoiceSession, myGeneration: number): Promise<'ok' | 'timeout' | 'failed'> => {
+    const initPromise = session.init();
+    initPromise.then(
+      () => {
+        if (myGeneration !== initGenerationRef.current) {
+          logDebug('Late mic init completed after being superseded — tearing down orphaned session');
+          void session.teardown();
         }
       },
-      onSpeechEnd: async (blob, durationMs) => {
-        // A clip shorter than this is almost certainly a noise blip, not a
-        // word — sending it to Whisper risks a hallucinated transcription
-        // (a known failure mode on near-silent audio), which would then get
-        // treated as a real reply and loop the conversation on nothing said.
-        const MIN_CLIP_MS = 400;
-        if (durationMs < MIN_CLIP_MS) {
-          logDebug(`Clip too short (${durationMs.toFixed(0)}ms) — listening again`);
+      () => {
+        // Failure already surfaced via the race result below; nothing
+        // else to clean up since a failed init() never leaves resources open.
+      }
+    );
+    const settled = initPromise.then((): 'ok' => 'ok', (): 'failed' => 'failed');
+    const timedOut = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), MIC_INIT_TIMEOUT_MS));
+    return Promise.race([settled, timedOut]);
+  };
+
+  const handleSpeechEnd = (blob: Blob, durationMs: number) => {
+    clearWatchdog();
+    // A clip shorter than this is almost certainly a noise blip, not a
+    // word — sending it to Whisper risks a hallucinated transcription (a
+    // known failure mode on near-silent audio), which would then get
+    // treated as a real reply and loop the conversation on nothing said.
+    if (durationMs < MIN_CLIP_MS) {
+      logDebug(`Clip too short (${durationMs.toFixed(0)}ms) — listening again`);
+      startListening();
+      return;
+    }
+
+    setState('transcribing');
+    logDebug('Sending audio to /api/transcribe…');
+
+    void (async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      try {
+        mark('transcribe_request_start');
+        const res = await fetch('/api/transcribe', { method: 'POST', body: blob, signal: controller.signal });
+        if (!res.ok) {
+          const body = await res.text().catch(() => '');
+          logDebug(`Transcribe failed: HTTP ${res.status} — ${body.slice(0, 200)}`);
           startListening();
           return;
         }
-
-        setState('transcribing');
-        logDebug('Sending audio to /api/transcribe…');
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-        try {
-          mark('transcribe_request_start');
-          const res = await fetch('/api/transcribe', { method: 'POST', body: blob, signal: controller.signal });
-          if (!res.ok) {
-            const body = await res.text().catch(() => '');
-            logDebug(`Transcribe failed: HTTP ${res.status} — ${body.slice(0, 200)}`);
-            startListening();
-            return;
-          }
-          const { text } = (await res.json()) as { text?: string };
-          mark('transcribe_response');
-          logDebug(`Transcribed: "${text ?? '(empty)'}"`);
-          if (text && text.trim()) {
-            onUserSpeech(text.trim());
-          } else {
-            startListening();
-          }
-        } catch (err) {
-          const isTimeout = err instanceof Error && err.name === 'AbortError';
-          logDebug(isTimeout ? 'Transcription timed out after 15s — listening again' : `Transcription error: ${err instanceof Error ? err.message : String(err)}`);
-          if (!isTimeout) console.error('Transcription failed:', err);
-          startListening();
-        } finally {
-          clearTimeout(timeoutId);
-        }
-      },
-    });
-
-    vadRef.current = vad;
-    const micTimeout = new Promise<never>((_, reject) =>
-      setTimeout(() => {
-        logDebug(`[diag] 10s mic timeout FIRED (turn #${turnCountRef.current})`);
-        reject(new Error('Mic access timed out after 10s'));
-      }, 10000)
-    );
-    Promise.race([vad.start(), micTimeout])
-      .then(() => {
-        logDebug(`[diag] Promise.race resolved: vad.start() won (turn #${turnCountRef.current})`);
-        // Mic access succeeded and monitoring has begun. If no speech is
-        // ever detected — including the case where getUserMedia silently
-        // handed back a dead/muted stream, a real and observed mobile
-        // failure mode that produces no error at all — this guarantees
-        // the app doesn't just sit listening in total silence forever.
-        // Tearing down and retrying gets a genuinely fresh getUserMedia
-        // call, which has a real chance of recovering a working stream
-        // even when the current one doesn't work, without needing to know
-        // exactly why it didn't.
-        // A normal long pause (the person is thinking, stepped away
-        // briefly) must never be mistaken for a dead mic and trigger a
-        // teardown/retry -- explicitly required to tolerate at least 40s
-        // of silence before the user starts speaking. Set well above that
-        // with real margin, not just barely over it.
-        const NO_SPEECH_TIMEOUT_MS = 50000;
-        const MAX_NO_SPEECH_RETRIES = 3;
-        noSpeechTimeoutId = setTimeout(async () => {
-          if (vadRef.current !== vad) return; // superseded by a newer listen cycle already
-          logDebug(`No speech detected within ${NO_SPEECH_TIMEOUT_MS / 1000}s — retrying with a fresh mic stream`);
-          await vad.stop();
-          if (noSpeechRetryCount < MAX_NO_SPEECH_RETRIES && enabledRef.current) {
-            startListening(false, noSpeechRetryCount + 1);
-          } else {
-            logDebug('No speech detected after repeated retries — giving up for now');
-            setState('idle');
-          }
-        }, NO_SPEECH_TIMEOUT_MS);
-      })
-      .catch((err) => {
-        logDebug(`Mic access failed: ${err instanceof Error ? err.message : String(err)}`);
-        const isTimeoutFailure = err instanceof Error && err.message === 'Mic access timed out after 10s';
-        logDebug(`[diag] Promise.race settled via ${isTimeoutFailure ? 'TIMEOUT' : "vad.start() rejection"} (turn #${turnCountRef.current})`);
-        console.error('Mic access failed:', err);
-        // A single automatic retry — a transient mic/AudioContext hiccup
-        // between turns (e.g. the previous turn's resources not fully
-        // released yet) is common enough on mobile that silently stranding
-        // the conversation at idle after one failure is worse than trying
-        // once more. If the retry also fails, give up and surface idle so
-        // at minimum the UI reflects reality rather than looking hung.
-        if (!isRetry && enabledRef.current) {
-          logDebug('Retrying mic access once…');
-          setTimeout(() => startListening(true), 400);
+        const { text } = (await res.json()) as { text?: string };
+        mark('transcribe_response');
+        logDebug(`Transcribed: "${text ?? '(empty)'}"`);
+        if (text && text.trim()) {
+          onUserSpeechRef.current(text.trim());
         } else {
-          setState('idle');
+          startListening();
         }
-      });
-  }, [onUserSpeech]);
+      } catch (err) {
+        const isTimeout = err instanceof Error && err.name === 'AbortError';
+        logDebug(isTimeout ? 'Transcription timed out after 15s — listening again' : `Transcription error: ${err instanceof Error ? err.message : String(err)}`);
+        if (!isTimeout) console.error('Transcription failed:', err);
+        startListening();
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    })();
+  };
 
-  /** Call once, from a real tap. Unlocks audio for the whole session — actual
-   *  mic access happens lazily on the first real startListening() call, which
-   *  already requests and handles it correctly on its own. This used to also
-   *  call getUserMedia() here, but that stream was discarded immediately and
-   *  never used for anything — it just meant every voice-enabled conversation
-   *  silently asked for the microphone twice in a row. */
+  const makeSessionOptions = (): VoiceSessionOptions => ({
+    onDebug: logDebug,
+    onSpeechStart: () => {
+      // Real speech is happening — let the normal turn-ending logic
+      // (silence after speech) take over instead of the no-speech watchdog.
+      clearWatchdog();
+    },
+    onSpeechEnd: handleSpeechEnd,
+  });
+
+  /** Fires once per listening period; if nothing is heard for
+   *  NO_SPEECH_TIMEOUT_MS, checks whether the mic is still genuinely
+   *  healthy. Healthy → this is just a long thinking pause, keep waiting
+   *  (reschedules itself). Unhealthy → a bounded number of full session
+   *  reinits, each generation-guarded against a disable/unmount racing in
+   *  the middle of it. */
+  const startWatchdog = (retryCount = 0) => {
+    clearWatchdog();
+    noSpeechTimerRef.current = setTimeout(async () => {
+      const session = sessionRef.current;
+      if (!session || !enabledRef.current) return;
+      if (session.isHealthy()) {
+        logDebug(`No speech in ${NO_SPEECH_TIMEOUT_MS / 1000}s — mic still healthy, continuing to listen`);
+        startWatchdog(retryCount);
+        return;
+      }
+      if (retryCount >= MAX_REINIT_ATTEMPTS) {
+        logDebug('Mic unhealthy after repeated reinit attempts — giving up for now');
+        setState('idle');
+        return;
+      }
+      logDebug(`Mic appears unhealthy (track ended/muted) — reinitializing session (attempt ${retryCount + 1})`);
+      const myGeneration = ++initGenerationRef.current;
+      await session.teardown();
+      const fresh = new VoiceSession(makeSessionOptions());
+      const result = await attemptInit(fresh, myGeneration);
+      if (myGeneration !== initGenerationRef.current) return; // superseded meanwhile (e.g. voice disabled)
+      if (result !== 'ok') {
+        logDebug('Session reinit failed — giving up for now');
+        setState('idle');
+        return;
+      }
+      sessionRef.current = fresh;
+      startListening(retryCount + 1);
+    }, NO_SPEECH_TIMEOUT_MS);
+  };
+
+  const startListening = useCallback((noSpeechRetryCount = 0) => {
+    if (!enabledRef.current) return;
+    const session = sessionRef.current;
+    if (!session) {
+      logDebug('startListening called with no active session — ignoring');
+      return;
+    }
+    setState('listening');
+    if (noSpeechRetryCount === 0) turnCountRef.current += 1;
+    logDebug(`Listening for your voice… (turn #${turnCountRef.current}${noSpeechRetryCount > 0 ? `, reinit retry ${noSpeechRetryCount}` : ''})`);
+    session.resumeListening();
+    startWatchdog(noSpeechRetryCount);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Call once, from a real tap. Unlocks audio, then stands up the ONE
+   *  persistent mic/AudioContext/recorder pipeline for the whole
+   *  conversation — everything after this is lightweight state
+   *  transitions within that same session, not new mic sessions. */
   const enableVoiceConversation = useCallback(async () => {
     logDebug('Enabling voice: unlocking audio…');
     unlockAudio();
+    const myGeneration = ++initGenerationRef.current;
+    const session = new VoiceSession(makeSessionOptions());
+    const result = await attemptInit(session, myGeneration);
+    if (myGeneration !== initGenerationRef.current) return; // superseded while initializing
+    if (result !== 'ok') {
+      logDebug(result === 'timeout' ? 'Mic init timed out after 10s' : 'Mic init failed');
+      return;
+    }
+    sessionRef.current = session;
     enabledRef.current = true;
     setEnabled(true);
-    logDebug('Voice enabled');
-  }, []);
+    logDebug('Voice enabled — persistent mic session started');
+    startListening();
+  }, [startListening]);
 
   const disableVoiceConversation = useCallback(() => {
-    vadRef.current?.stop();
+    ++initGenerationRef.current; // invalidate any in-flight init()
+    clearWatchdog();
     enabledRef.current = false;
     setEnabled(false);
     setState('idle');
+    const session = sessionRef.current;
+    sessionRef.current = null;
+    void session?.teardown();
   }, []);
 
   /** Call whenever MindTip has a new response. Auto-starts listening when done speaking. */
@@ -704,7 +813,9 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
         logDebug('speakResponse called but voice is not enabled — skipped');
         return;
       }
+      clearWatchdog();
       setState('speaking');
+      sessionRef.current?.pauseListening();
       try {
         await speakText(text, voiceKey, logDebug);
       } catch (err) {
@@ -712,14 +823,11 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
         console.error('Speech playback failed:', err);
       }
       finishTurnAndReport(logDebug);
-      // EXPERIMENT: a captured log showed listening beginning the exact
-      // instant playback ended -- zero gap between the speaker finishing
-      // and the mic being asked to start capturing. Audio hardware
-      // switching from output to input isn't always instantaneous; this
-      // small pause gives that transition room to complete before the mic
-      // stream is requested, rather than requesting it mid-switch. Clearly
-      // labeled as an experiment, not a confirmed fix -- trivially
-      // reversible (this one line) if it doesn't help.
+      // A captured log once showed listening beginning the exact instant
+      // playback ended — zero gap between the speaker finishing and the
+      // mic being asked to react. Audio hardware switching from output to
+      // input isn't always instantaneous; this small pause gives that
+      // transition room to complete before we resume reacting to input.
       if (enabledRef.current) {
         await new Promise(resolve => setTimeout(resolve, 250));
       }
@@ -730,22 +838,25 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
 
   // Safety net: this hook has no other tie to the component's lifecycle, so
   // without this, exiting a conversation (or any other unmount) leaves the
-  // mic stream, AudioContext, and requestAnimationFrame monitor loop from
-  // this instance running in the browser indefinitely -- raw browser APIs
-  // like these don't stop just because the React component that created
-  // them went away. That's exactly what let a second conversation's voice
-  // loop start on top of a first one that was never actually torn down.
-  // handleExit calling disableVoiceConversation() explicitly is the primary
-  // fix; this covers every other way the component could unmount.
+  // mic stream, AudioContext, and requestAnimationFrame monitor loop
+  // running in the browser indefinitely -- raw browser APIs like these
+  // don't stop just because the React component that created them went
+  // away. handleExit calling disableVoiceConversation() explicitly is the
+  // primary fix; this covers every other way the component could unmount.
   useEffect(() => {
     return () => {
+      ++initGenerationRef.current;
       enabledRef.current = false;
-      vadRef.current?.stop();
+      clearWatchdog();
+      const session = sessionRef.current;
+      sessionRef.current = null;
+      void session?.teardown();
       if (debugFlushTimerRef.current !== null) {
         clearTimeout(debugFlushTimerRef.current);
         debugFlushTimerRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return { state, enabled, debugLog, logDebug, enableVoiceConversation, disableVoiceConversation, speakResponse, startListening };
