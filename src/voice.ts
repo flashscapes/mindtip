@@ -264,6 +264,17 @@ class VoiceSession {
   private silenceStart: number | null = null;
   private rafId: number | null = null;
   private lastDebugAt = 0;
+
+  // TEMPORARY DIAGNOSTIC ONLY — counts frame-level above/below-threshold
+  // behavior within each ~500ms debug-log window, to verify whether brief
+  // dips below silenceThreshold are what's preventing minSpeechDurationMs
+  // from ever being reached. Remove once the VAD diagnosis is confirmed.
+  private vadWindowFrames = 0;
+  private vadWindowAbove = 0;
+  private vadWindowBelow = 0;
+  private vadCurrentRunFrames = 0;
+  private vadLongestRunFrames = 0;
+  private vadResetOccurred = false;
   private opts: Required<VoiceSessionOptions>;
 
   constructor(opts: VoiceSessionOptions = {}) {
@@ -407,10 +418,36 @@ class VoiceSession {
     const rms = Math.sqrt(sumSquares / data.length);
     const now = performance.now();
 
+    // TEMPORARY DIAGNOSTIC ONLY — see field comments above.
+    this.vadWindowFrames++;
+    if (rms > this.opts.silenceThreshold) {
+      this.vadWindowAbove++;
+      this.vadCurrentRunFrames++;
+      if (this.vadCurrentRunFrames > this.vadLongestRunFrames) {
+        this.vadLongestRunFrames = this.vadCurrentRunFrames;
+      }
+    } else {
+      this.vadWindowBelow++;
+      this.vadCurrentRunFrames = 0;
+    }
+
     // Throttled so we can see live mic levels without flooding — every ~500ms.
     if (now - this.lastDebugAt > 500) {
+      const windowElapsedMs = this.lastDebugAt === 0 ? 500 : now - this.lastDebugAt;
       this.lastDebugAt = now;
       this.opts.onDebug(`Mic level: ${rms.toFixed(1)} (threshold ${this.opts.silenceThreshold}), speaking=${this.speaking}`);
+      // TEMPORARY DIAGNOSTIC ONLY — remove once VAD diagnosis is confirmed.
+      const frameMs = this.vadWindowFrames > 0 ? windowElapsedMs / this.vadWindowFrames : 0;
+      const longestRunMs = Math.round(this.vadLongestRunFrames * frameMs);
+      this.opts.onDebug(
+        `VAD window: ${this.vadWindowFrames} frames | above: ${this.vadWindowAbove} | below: ${this.vadWindowBelow} | ` +
+        `longest above run: ${longestRunMs}ms | threshold: ${this.opts.silenceThreshold} | reset=${this.vadResetOccurred} | speaking=${this.speaking}`
+      );
+      this.vadWindowFrames = 0;
+      this.vadWindowAbove = 0;
+      this.vadWindowBelow = 0;
+      this.vadLongestRunFrames = 0;
+      this.vadResetOccurred = false;
     }
 
     if (rms > this.opts.silenceThreshold) {
@@ -439,6 +476,10 @@ class VoiceSession {
         this.silenceStart = null;
       }
     } else {
+      // TEMPORARY DIAGNOSTIC ONLY — a reset only "counts" if there was an
+      // in-progress above-threshold streak being cut short, not just
+      // another silent frame while already silent.
+      if (this.aboveThresholdSince !== null) this.vadResetOccurred = true;
       this.aboveThresholdSince = null;
       if (this.speaking) {
         if (this.silenceStart === null) {
