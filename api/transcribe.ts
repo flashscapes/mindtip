@@ -51,7 +51,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!groqRes.ok) {
       const errText = await groqRes.text();
       console.error('Groq transcription error:', errText);
-      res.status(502).json({ error: 'Transcription failed' });
+      // TEMPORARY DIAGNOSTIC ONLY — surface Groq's actual status/error text
+      // to the client so it shows up in the frontend debug log, instead of
+      // a generic message that hides which upstream failure this actually is.
+      res.status(502).json({
+        error: 'Transcription failed',
+        upstreamStatus: groqRes.status,
+        upstreamError: errText.slice(0, 500),
+      });
       return;
     }
 
