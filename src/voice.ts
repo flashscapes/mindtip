@@ -646,7 +646,9 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
    *  (instead of one per turn), this exact race is also far less likely to
    *  matter in practice — but it's now closed structurally, not just
    *  shrunk. */
-  const attemptInit = (session: VoiceSession, myGeneration: number): Promise<'ok' | 'timeout' | 'failed'> => {
+  type InitResult = { status: 'ok' } | { status: 'timeout' } | { status: 'failed'; error: unknown };
+
+  const attemptInit = (session: VoiceSession, myGeneration: number): Promise<InitResult> => {
     const initPromise = session.init();
     initPromise.then(
       () => {
@@ -660,8 +662,16 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
         // else to clean up since a failed init() never leaves resources open.
       }
     );
-    const settled = initPromise.then((): 'ok' => 'ok', (): 'failed' => 'failed');
-    const timedOut = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), MIC_INIT_TIMEOUT_MS));
+    // TEMPORARY DIAGNOSTIC: carry the actual rejection (e.g. a
+    // getUserMedia DOMException like NotAllowedError/NotFoundError/
+    // NotReadableError) through to the caller instead of discarding it —
+    // "Mic init failed" alone doesn't say WHY, the same gap that hid the
+    // real Groq error earlier.
+    const settled = initPromise.then(
+      (): InitResult => ({ status: 'ok' }),
+      (error: unknown): InitResult => ({ status: 'failed', error })
+    );
+    const timedOut = new Promise<InitResult>((resolve) => setTimeout(() => resolve({ status: 'timeout' }), MIC_INIT_TIMEOUT_MS));
     return Promise.race([settled, timedOut]);
   };
 
@@ -748,8 +758,9 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
       const fresh = new VoiceSession(makeSessionOptions());
       const result = await attemptInit(fresh, myGeneration);
       if (myGeneration !== initGenerationRef.current) return; // superseded meanwhile (e.g. voice disabled)
-      if (result !== 'ok') {
-        logDebug('Session reinit failed — giving up for now');
+      if (result.status !== 'ok') {
+        const detail = result.status === 'failed' ? (result.error instanceof Error ? `${result.error.name}: ${result.error.message}` : String(result.error)) : 'timed out after 10s';
+        logDebug(`Session reinit failed — giving up for now (${detail})`);
         setState('idle');
         return;
       }
@@ -784,8 +795,14 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     const session = new VoiceSession(makeSessionOptions());
     const result = await attemptInit(session, myGeneration);
     if (myGeneration !== initGenerationRef.current) return; // superseded while initializing
-    if (result !== 'ok') {
-      logDebug(result === 'timeout' ? 'Mic init timed out after 10s' : 'Mic init failed');
+    if (result.status !== 'ok') {
+      if (result.status === 'timeout') {
+        logDebug('Mic init timed out after 10s');
+      } else {
+        const err = result.error;
+        const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+        logDebug(`Mic init failed: ${detail}`);
+      }
       return;
     }
     sessionRef.current = session;
