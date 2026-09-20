@@ -1,9 +1,10 @@
 // DESTINATION: api/transcribe.ts  (repo root, alongside api/speak.ts)
 //
-// Receives raw audio bytes (audio/webm from MediaRecorder) as the request
-// body and forwards them to Groq's Whisper endpoint. Requires a new env
-// var: GROQ_API_KEY (separate from whatever key powers your Gemini
-// conversation logic — Whisper isn't part of the Gemini API).
+// Receives raw audio bytes (whatever MIME type MediaRecorder actually used
+// client-side — audio/webm on most browsers, audio/mp4 on Safari/iOS) as
+// the request body and forwards them to Groq's Whisper endpoint. Requires
+// a new env var: GROQ_API_KEY (separate from whatever key powers your
+// Gemini conversation logic — Whisper isn't part of the Gemini API).
 
 export const config = {
   api: { bodyParser: false },
@@ -32,8 +33,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
+    // The client now sends the MIME type it actually recorded in
+    // (MediaRecorder's negotiated type, via the request's Content-Type) —
+    // NOT always audio/webm. Safari on iOS doesn't support webm at all and
+    // silently records audio/mp4 instead; hardcoding 'speech.webm' /
+    // 'audio/webm' here regardless labeled that mp4 data as webm, which
+    // Groq correctly rejected ("could not process file - is it a valid
+    // media file?"). Mapping the real incoming type to a matching filename
+    // extension so Groq can actually identify the format.
+    const incomingType = (req.headers['content-type'] || 'audio/webm').split(';')[0].trim();
+    const extensionByType: Record<string, string> = {
+      'audio/webm': 'webm',
+      'audio/mp4': 'mp4',
+      'audio/aac': 'aac',
+      'audio/mpeg': 'mp3',
+      'audio/ogg': 'ogg',
+      'audio/wav': 'wav',
+      'audio/x-wav': 'wav',
+    };
+    const extension = extensionByType[incomingType] ?? 'webm';
+
     const formData = new FormData();
-    formData.append('file', new Blob([new Uint8Array(audioBuffer)], { type: 'audio/webm' }), 'speech.webm');
+    formData.append('file', new Blob([new Uint8Array(audioBuffer)], { type: incomingType }), `speech.${extension}`);
     formData.append('model', 'whisper-large-v3-turbo');
     // Both measurably improve accuracy over relying on auto-detection alone,
     // especially on short or quiet clips — a language hint skips language

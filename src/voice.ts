@@ -244,6 +244,16 @@ class VoiceSession {
   private recorder: MediaRecorder | null = null;
 
   private chunks: Blob[] = [];
+  // The MIME type MediaRecorder actually negotiated — NOT necessarily
+  // 'audio/webm'. Safari on iOS doesn't support audio/webm at all, so
+  // MediaRecorder silently falls back to its own default (audio/mp4).
+  // Hardcoding 'audio/webm' on the resulting Blob regardless of what was
+  // actually recorded produced a file labeled webm but containing mp4
+  // bytes — which Groq correctly rejected as unparseable. Captured right
+  // after the recorder is created so the real format is used everywhere
+  // downstream (the Blob's type, and therefore the Content-Type header
+  // fetch sends automatically).
+  private recordedMimeType = 'audio/webm';
   // Small rolling buffer of chunks recorded while speech has not yet been
   // confirmed for the CURRENT turn — see resumeListening()/monitor() for
   // how it's filled, cleared, and consumed. Same pre-roll mechanism as
@@ -333,6 +343,12 @@ class VoiceSession {
     const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
     this.opts.onDebug(`Using MediaRecorder mimeType: "${mimeType || '(browser default)'}"`);
     this.recorder = new MediaRecorder(this.stream, mimeType ? { mimeType } : undefined);
+    // The browser fills in the actual negotiated type here regardless of
+    // what (if anything) we requested — this is the ground truth, not the
+    // request above. Falls back to 'audio/webm' only if the browser
+    // somehow reports nothing at all.
+    this.recordedMimeType = this.recorder.mimeType || 'audio/webm';
+    this.opts.onDebug(`MediaRecorder actual negotiated mimeType: "${this.recordedMimeType}"`);
     this.chunks = [];
     this.preRollChunks = [];
     this.recorder.ondataavailable = (e) => {
@@ -508,7 +524,7 @@ class VoiceSession {
     const chunks = this.chunks;
     this.opts.onDebug(`Turn finished: ${durationMs.toFixed(0)}ms of speech, ${chunks.length} chunk(s) recorded`);
     this.pauseListening();
-    const blob = new Blob(chunks, { type: 'audio/webm' });
+    const blob = new Blob(chunks, { type: this.recordedMimeType });
     mark('capture_finalized');
     this.opts.onDebug(`Recorded blob: ${blob.size} bytes`);
     this.opts.onSpeechEnd(blob, durationMs);
