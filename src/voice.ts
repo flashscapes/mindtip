@@ -291,6 +291,22 @@ class VoiceSession {
   private active = false;
   private speaking = false;
   private aboveThresholdSince: number | null = null;
+  // When the signal most recently dropped below threshold, or null if the
+  // last frame was above it. Real speech dips below threshold constantly
+  // between syllables, and the old code reset aboveThresholdSince on the
+  // very first such frame — so the "stay above threshold for
+  // minSpeechDurationMs" requirement kept restarting from zero and took
+  // ~6 SECONDS to ever be satisfied (measured: a window with 19 of 31
+  // frames above threshold still had a longest unbroken run of only
+  // 267ms). Tracking when the dip started lets a brief one ride through
+  // instead, which is the standard hangover/hold behavior real voice
+  // detectors use.
+  private belowThresholdSince: number | null = null;
+  // How long the signal must stay below threshold before an in-progress
+  // onset actually counts as broken. Long enough for inter-syllable gaps,
+  // short enough that two unrelated impulse noises (a click, a knock)
+  // won't chain together into a false onset.
+  private static readonly DIP_TOLERANCE_MS = 120;
   private speechStartedAt: number | null = null;
   private silenceStart: number | null = null;
   private rafId: number | null = null;
@@ -315,7 +331,13 @@ class VoiceSession {
       onStreamLost: opts.onStreamLost ?? (() => {}),
       onDebug: opts.onDebug ?? (() => {}),
       silenceThreshold: opts.silenceThreshold ?? 5,
-      silenceDurationMs: opts.silenceDurationMs ?? 3200,
+      // Was 3200ms — a flat 3.2s of dead air after the person stopped
+      // talking before anything was even sent for transcription, on top of
+      // transcribe + AI + speech time. Cut to 1.8s, which is still a long
+      // mid-sentence pause to tolerate, and the dip tolerance added above
+      // makes resumed speech far better at clearing this countdown than it
+      // was when 3.2s was chosen as protection against premature cutoffs.
+      silenceDurationMs: opts.silenceDurationMs ?? 1800,
       minSpeechDurationMs: opts.minSpeechDurationMs ?? 250,
       minResumeDurationMs: opts.minResumeDurationMs ?? 100,
     };
@@ -431,6 +453,7 @@ class VoiceSession {
     this.preRollChunks = [];
     this.speaking = false;
     this.aboveThresholdSince = null;
+    this.belowThresholdSince = null;
     this.speechStartedAt = null;
     this.silenceStart = null;
     this.active = true;
@@ -516,12 +539,15 @@ class VoiceSession {
     }
 
     if (rms > this.opts.silenceThreshold) {
+      this.belowThresholdSince = null; // any loud frame clears a pending dip
       if (this.aboveThresholdSince === null) {
         this.aboveThresholdSince = now;
       }
       // Only count this as real speech once amplitude has stayed elevated
-      // continuously for minSpeechDurationMs — a single loud frame (a tap,
-      // a click, a stray noise) shouldn't be enough on its own.
+      // for minSpeechDurationMs — a single loud frame (a tap, a click, a
+      // stray noise) shouldn't be enough on its own. "Elevated" tolerates
+      // dips shorter than DIP_TOLERANCE_MS (see belowThresholdSince); it
+      // used to demand an unbroken run, which real speech rarely produces.
       if (!this.speaking && now - this.aboveThresholdSince > this.opts.minSpeechDurationMs) {
         this.speaking = true;
         this.speechStartedAt = this.aboveThresholdSince;
@@ -541,11 +567,19 @@ class VoiceSession {
         this.silenceStart = null;
       }
     } else {
-      // TEMPORARY DIAGNOSTIC ONLY — a reset only "counts" if there was an
-      // in-progress above-threshold streak being cut short, not just
-      // another silent frame while already silent.
-      if (this.aboveThresholdSince !== null) this.vadResetOccurred = true;
-      this.aboveThresholdSince = null;
+      // A dip only breaks an in-progress onset once it has persisted for
+      // DIP_TOLERANCE_MS — see the belowThresholdSince field comment for
+      // why resetting on the first quiet frame made onset detection take
+      // seconds instead of milliseconds.
+      if (this.belowThresholdSince === null) {
+        this.belowThresholdSince = now;
+      } else if (now - this.belowThresholdSince > VoiceSession.DIP_TOLERANCE_MS) {
+        // TEMPORARY DIAGNOSTIC ONLY — a reset only "counts" if there was an
+        // in-progress above-threshold streak being cut short, not just
+        // another silent frame while already silent.
+        if (this.aboveThresholdSince !== null) this.vadResetOccurred = true;
+        this.aboveThresholdSince = null;
+      }
       if (this.speaking) {
         if (this.silenceStart === null) {
           this.silenceStart = now;
