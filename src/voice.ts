@@ -434,6 +434,14 @@ class VoiceSession {
     this.speechStartedAt = null;
     this.silenceStart = null;
     this.active = true;
+    // Restart the monitor loop if it stopped. It stops exactly once per
+    // completed turn (see monitor()'s turn-ending branch), so without this
+    // every turn after the first speech turn listened into a loop that was
+    // no longer running. Guarded on rafId so a still-running loop is never
+    // double-scheduled into two concurrent loops.
+    if (this.rafId === null && this.analyser) {
+      this.rafId = requestAnimationFrame(this.monitor);
+    }
     if (this.audioCtx?.state === 'suspended') {
       void this.audioCtx.resume();
     }
@@ -543,6 +551,14 @@ class VoiceSession {
           this.silenceStart = now;
         } else if (now - this.silenceStart > this.opts.silenceDurationMs) {
           this.opts.onDebug('Silence held long enough — ending turn');
+          // The loop genuinely stops here — nulling rafId FIRST (before
+          // finishTurn, which can synchronously call back into
+          // resumeListening via onSpeechEnd) is what lets resumeListening
+          // see that it needs to restart it. Without that restart, this
+          // return killed turn detection permanently: every turn after the
+          // first completed one had no monitor running at all, which is
+          // why the app reliably "heard me once, then died".
+          this.rafId = null;
           this.finishTurn();
           return;
         }
