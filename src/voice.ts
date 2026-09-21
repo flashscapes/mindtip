@@ -202,6 +202,15 @@ async function speakText(text: string, voiceKey?: string, onDebug?: (msg: string
 interface VoiceSessionOptions {
   onSpeechStart?: () => void;
   onSpeechEnd?: (audioBlob: Blob, durationMs: number) => void;
+  // Fired the moment the underlying mic track's readyState becomes
+  // 'ended' — a real, permanent loss (most commonly iOS backgrounding the
+  // tab), never a transient mute that might self-resolve. This is an
+  // event, not a poll: real captured evidence showed it firing within ~4s
+  // of the actual loss, while a 50s setTimeout-based watchdog checking the
+  // same condition was delayed nearly 5 minutes by iOS's background timer
+  // throttling. Acting on this directly, instead of waiting for that
+  // timer, is what makes recovery actually prompt.
+  onStreamLost?: () => void;
   onDebug?: (msg: string) => void;
   silenceThreshold?: number; // amplitude (0-128 scale) below which is "quiet"
   silenceDurationMs?: number; // how long quiet must persist before ending the turn
@@ -303,6 +312,7 @@ class VoiceSession {
     this.opts = {
       onSpeechStart: opts.onSpeechStart ?? (() => {}),
       onSpeechEnd: opts.onSpeechEnd ?? (() => {}),
+      onStreamLost: opts.onStreamLost ?? (() => {}),
       onDebug: opts.onDebug ?? (() => {}),
       silenceThreshold: opts.silenceThreshold ?? 5,
       silenceDurationMs: opts.silenceDurationMs ?? 3200,
@@ -338,7 +348,14 @@ class VoiceSession {
       );
       track.onmute = () => this.opts.onDebug(`⚠ Mic track went MUTED mid-session (readyState=${track.readyState})`);
       track.onunmute = () => this.opts.onDebug(`Mic track unmuted (readyState=${track.readyState})`);
-      track.onended = () => this.opts.onDebug(`⚠ Mic track ENDED unexpectedly (readyState=${track.readyState})`);
+      // 'ended' is permanent — unlike 'muted' (which can self-resolve via
+      // onunmute, e.g. a brief Siri/system-audio interruption), a track
+      // that has ended will never produce data again. This is the
+      // authoritative "the stream is actually gone" signal.
+      track.onended = () => {
+        this.opts.onDebug(`⚠ Mic track ENDED unexpectedly (readyState=${track.readyState})`);
+        this.opts.onStreamLost();
+      };
     }
 
     this.audioCtx = new AudioContext();
@@ -593,7 +610,21 @@ class VoiceSession {
 
 // ---------- The hook that ties it all together ----------
 
-type ConversationState = 'idle' | 'speaking' | 'listening' | 'transcribing';
+// 'mic-lost': the mic track has permanently ended (most commonly iOS
+// backgrounding the tab) and needs a real tap to recover — Safari refuses
+// to grant a fresh mic stream from anything but a direct user gesture, so
+// this state exists specifically to surface a tappable UI affordance
+// rather than attempt (and silently fail) a programmatic reinit.
+type ConversationState = 'idle' | 'speaking' | 'listening' | 'transcribing' | 'mic-lost';
+
+// Minimal local typing for the Screen Wake Lock API: not universally
+// present in TS's built-in DOM lib depending on target/lib config, and
+// this app only ever touches the two members it actually uses. Avoids a
+// hard build dependency on lib.dom's coverage of a still-evolving API.
+interface WakeLockSentinelLike {
+  release: () => Promise<void>;
+  addEventListener: (type: 'release', listener: () => void) => void;
+}
 
 interface UseVoiceConversationOptions {
   onUserSpeech: (transcript: string) => void;
@@ -647,6 +678,67 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
   // after it's been superseded checks this to know it's now orphaned (see
   // attemptInit()) instead of silently adopting itself as the live session.
   const initGenerationRef = useRef(0);
+  // True from the moment the mic is confirmed lost (onStreamLost fired, or
+  // the watchdog found it unhealthy) until resumeAfterMicLoss() runs.
+  // Blocks startListening() from silently resuming against a session that
+  // no longer has a working mic — without this, a speakResponse() already
+  // in flight when the mic died would finish and call startListening()
+  // anyway, overwriting the 'mic-lost' state with 'listening' against a
+  // dead stream.
+  const micLostRef = useRef(false);
+  const wakeLockRef = useRef<WakeLockSentinelLike | null>(null);
+
+  // Screen Wake Lock: prevents the OS's automatic idle-timeout screen lock
+  // while voice is active — the single most common real-world cause of the
+  // mic being silently revoked (the person is listening/thinking, not
+  // touching the screen, and it locks itself). This does NOT and cannot
+  // prevent the person manually locking the phone or switching apps; no
+  // website can override that on iOS. Feature-detected and best-effort:
+  // unsupported browsers, and a request that's denied or later revoked by
+  // the OS, both degrade to "no wake lock" rather than breaking anything.
+  const requestWakeLock = async () => {
+    if (!('wakeLock' in navigator)) {
+      logDebug('Wake Lock API not supported on this browser — screen may auto-lock during voice');
+      return;
+    }
+    try {
+      const sentinel = (await (navigator as unknown as { wakeLock: { request: (type: 'screen') => Promise<WakeLockSentinelLike> } }).wakeLock.request('screen'));
+      wakeLockRef.current = sentinel;
+      logDebug('Screen wake lock acquired');
+      sentinel.addEventListener('release', () => {
+        logDebug('Screen wake lock was released (system-level, e.g. low battery or tab hidden)');
+        wakeLockRef.current = null;
+      });
+    } catch (err) {
+      logDebug(`Wake lock request failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    try {
+      await wakeLockRef.current?.release();
+    } catch {
+      // Already released — nothing to do.
+    }
+    wakeLockRef.current = null;
+  };
+
+  // The Wake Lock spec has the sentinel auto-release whenever the document
+  // becomes hidden — it does not silently reacquire itself when the tab
+  // becomes visible again. Without this, a brief backgrounding that the
+  // mic itself survived (e.g. a quick notification glance, not long enough
+  // for iOS to revoke the mic) would still permanently lose wake-lock
+  // protection for the rest of the conversation.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && enabledRef.current && wakeLockRef.current === null) {
+        void requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The persistent VoiceSession's callbacks are wired up ONCE, when the
   // session is created — unlike the old per-turn design, they are not
@@ -665,7 +757,6 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
   // 40s of silence before the user starts speaking. Set well above that
   // with real margin, not just barely over it.
   const NO_SPEECH_TIMEOUT_MS = 50000;
-  const MAX_REINIT_ATTEMPTS = 3;
   const MIC_INIT_TIMEOUT_MS = 10000;
 
   const clearWatchdog = () => {
@@ -772,60 +863,88 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
       clearWatchdog();
     },
     onSpeechEnd: handleSpeechEnd,
+    onStreamLost: () => {
+      if (!enabledRef.current) return;
+      logDebug('Mic stream ended — needs a tap to resume (Safari only re-grants mic access from a real user gesture)');
+      clearWatchdog();
+      micLostRef.current = true;
+      setState('mic-lost');
+    },
   });
 
   /** Fires once per listening period; if nothing is heard for
    *  NO_SPEECH_TIMEOUT_MS, checks whether the mic is still genuinely
    *  healthy. Healthy → this is just a long thinking pause, keep waiting
-   *  (reschedules itself). Unhealthy → a bounded number of full session
-   *  reinits, each generation-guarded against a disable/unmount racing in
-   *  the middle of it. */
-  const startWatchdog = (retryCount = 0) => {
+   *  (reschedules itself). Unhealthy → surfaces the same tap-to-resume
+   *  prompt as onStreamLost, rather than attempting a silent reinit.
+   *
+   *  This is a secondary safety net, not the primary detector —
+   *  onStreamLost (wired to the mic track's real 'ended' event) already
+   *  catches the one real failure mode observed (iOS backgrounding) within
+   *  seconds. This only matters if that event somehow doesn't fire. A
+   *  silent getUserMedia() reinit from here was tried and directly
+   *  confirmed to fail with NotAllowedError — Safari requires a real user
+   *  gesture, which a timer callback can never provide — so there's no
+   *  reason to attempt it again from this path either. */
+  const startWatchdog = () => {
     clearWatchdog();
-    noSpeechTimerRef.current = setTimeout(async () => {
+    noSpeechTimerRef.current = setTimeout(() => {
       const session = sessionRef.current;
       if (!session || !enabledRef.current) return;
       if (session.isHealthy()) {
         logDebug(`No speech in ${NO_SPEECH_TIMEOUT_MS / 1000}s — mic still healthy, continuing to listen`);
-        startWatchdog(retryCount);
+        startWatchdog();
         return;
       }
-      if (retryCount >= MAX_REINIT_ATTEMPTS) {
-        logDebug('Mic unhealthy after repeated reinit attempts — giving up for now');
-        setState('idle');
-        return;
-      }
-      logDebug(`Mic appears unhealthy (track ended/muted) — reinitializing session (attempt ${retryCount + 1})`);
-      const myGeneration = ++initGenerationRef.current;
-      await session.teardown();
-      const fresh = new VoiceSession(makeSessionOptions());
-      const result = await attemptInit(fresh, myGeneration);
-      if (myGeneration !== initGenerationRef.current) return; // superseded meanwhile (e.g. voice disabled)
-      if (result.status !== 'ok') {
-        const detail = result.status === 'failed' ? (result.error instanceof Error ? `${result.error.name}: ${result.error.message}` : String(result.error)) : 'timed out after 10s';
-        logDebug(`Session reinit failed — giving up for now (${detail})`);
-        setState('idle');
-        return;
-      }
-      sessionRef.current = fresh;
-      startListening(retryCount + 1);
+      logDebug('Mic appears unhealthy (track ended/muted) — needs a tap to resume');
+      micLostRef.current = true;
+      setState('mic-lost');
     }, NO_SPEECH_TIMEOUT_MS);
   };
 
-  const startListening = useCallback((noSpeechRetryCount = 0) => {
-    if (!enabledRef.current) return;
+  const startListening = useCallback(() => {
+    if (!enabledRef.current || micLostRef.current) return;
     const session = sessionRef.current;
     if (!session) {
       logDebug('startListening called with no active session — ignoring');
       return;
     }
     setState('listening');
-    if (noSpeechRetryCount === 0) turnCountRef.current += 1;
-    logDebug(`Listening for your voice… (turn #${turnCountRef.current}${noSpeechRetryCount > 0 ? `, reinit retry ${noSpeechRetryCount}` : ''})`);
+    turnCountRef.current += 1;
+    logDebug(`Listening for your voice… (turn #${turnCountRef.current})`);
     session.resumeListening();
-    startWatchdog(noSpeechRetryCount);
+    startWatchdog();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** Call from a real tap on the "tap to resume" prompt after mic-lost.
+   *  This is the ONLY place a fresh getUserMedia() is requested outside of
+   *  enableVoiceConversation() — deliberately, since it must run
+   *  synchronously off a real click/tap to satisfy Safari's user-gesture
+   *  requirement for re-granting mic access once it's been lost. */
+  const resumeAfterMicLoss = useCallback(async () => {
+    logDebug('Resuming after mic loss…');
+    micLostRef.current = false;
+    clearWatchdog();
+    const myGeneration = ++initGenerationRef.current;
+    const oldSession = sessionRef.current;
+    sessionRef.current = null;
+    void oldSession?.teardown();
+    const session = new VoiceSession(makeSessionOptions());
+    const result = await attemptInit(session, myGeneration);
+    if (myGeneration !== initGenerationRef.current) return; // superseded (e.g. disabled meanwhile)
+    if (result.status !== 'ok') {
+      const detail = result.status === 'timeout' ? 'timed out after 10s' : (result.error instanceof Error ? `${result.error.name}: ${result.error.message}` : String(result.error));
+      logDebug(`Resume failed: ${detail}`);
+      micLostRef.current = true;
+      setState('mic-lost');
+      return;
+    }
+    sessionRef.current = session;
+    void requestWakeLock();
+    startListening();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startListening]);
 
   /** Call once, from a real tap. Unlocks audio, then stands up the ONE
    *  persistent mic/AudioContext/recorder pipeline for the whole
@@ -834,6 +953,7 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
   const enableVoiceConversation = useCallback(async () => {
     logDebug('Enabling voice: unlocking audio…');
     unlockAudio();
+    micLostRef.current = false;
     const myGeneration = ++initGenerationRef.current;
     const session = new VoiceSession(makeSessionOptions());
     const result = await attemptInit(session, myGeneration);
@@ -852,6 +972,7 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     enabledRef.current = true;
     setEnabled(true);
     logDebug('Voice enabled — persistent mic session started');
+    void requestWakeLock();
     startListening();
   }, [startListening]);
 
@@ -859,11 +980,13 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     ++initGenerationRef.current; // invalidate any in-flight init()
     clearWatchdog();
     enabledRef.current = false;
+    micLostRef.current = false;
     setEnabled(false);
     setState('idle');
     const session = sessionRef.current;
     sessionRef.current = null;
     void session?.teardown();
+    void releaseWakeLock();
   }, []);
 
   /** Call whenever MindTip has a new response. Auto-starts listening when done speaking. */
@@ -907,10 +1030,12 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     return () => {
       ++initGenerationRef.current;
       enabledRef.current = false;
+      micLostRef.current = false;
       clearWatchdog();
       const session = sessionRef.current;
       sessionRef.current = null;
       void session?.teardown();
+      void releaseWakeLock();
       if (debugFlushTimerRef.current !== null) {
         clearTimeout(debugFlushTimerRef.current);
         debugFlushTimerRef.current = null;
@@ -919,5 +1044,5 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { state, enabled, debugLog, logDebug, enableVoiceConversation, disableVoiceConversation, speakResponse, startListening };
+  return { state, enabled, debugLog, logDebug, enableVoiceConversation, disableVoiceConversation, speakResponse, startListening, resumeAfterMicLoss };
 }

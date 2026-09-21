@@ -563,7 +563,7 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
             className="text-[13px] transition-colors duration-300"
             style={{ color: voice.enabled ? (theme?.accentColor ?? '#B8935A') : '#345350' }}
           >
-            {voice.enabled ? (voice.state === 'idle' ? 'Voice on' : voice.state) : 'Voice off'}
+            {voice.enabled ? (voice.state === 'idle' ? 'Voice on' : voice.state === 'mic-lost' ? 'Voice paused' : voice.state) : 'Voice off'}
           </button>
           <button
             onClick={() => setShowDebug(v => !v)}
@@ -576,6 +576,16 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
           <button onClick={handleExit} className="text-[13px] transition-colors duration-300" style={{ color: theme?.accentColor ?? '#345350' }}>Close</button>
         </div>
       </header>
+
+      {voice.state === 'mic-lost' && (
+        <button
+          onClick={() => void voice.resumeAfterMicLoss()}
+          className="relative z-20 w-full text-center py-3 text-[13px] transition-opacity duration-300 hover:opacity-90"
+          style={{ background: theme?.accentColor ? `${theme.accentColor}26` : 'rgba(184,147,90,0.15)', color: theme?.accentColor ?? '#B8935A' }}
+        >
+          Voice paused — the mic was lost (often the screen locking). Tap here to resume listening.
+        </button>
+      )}
 
       {showDebug && (
         <div
