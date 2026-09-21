@@ -90,6 +90,38 @@ function splitIntoSentences(text: string): string[] {
   return sentences.length > 0 ? sentences : [text];
 }
 
+// Whisper reliably emits a small set of stock phrases when handed
+// near-silence — an artifact of being trained on captioned video, where
+// these play over quiet outros. In practice a pause with a little
+// incidental noise (paper, a breath, shifting in a chair) comes back as
+// "Thank you." and then gets answered as if it were a real message,
+// repeatedly.
+//
+// Deliberately matched against the ENTIRE transcript only: "thank you,
+// that really helped" is untouched. The cost is that a bare "thank you"
+// on its own is ignored and has to be repeated — accepted because the
+// alternative (an energy-based check) is not viable here: measured from
+// real session logs, genuine speech on this setup registers LOWER
+// above-threshold energy than the noise that triggers these false turns,
+// so any loudness test would start discarding real sentences.
+const WHISPER_SILENCE_ARTIFACTS = new Set([
+  'thank you',
+  'thanks',
+  'thank you very much',
+  'thanks for watching',
+  'thank you for watching',
+  'you',
+]);
+
+function isWhisperSilenceArtifact(text: string): boolean {
+  const normalized = text
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return normalized.length === 0 || WHISPER_SILENCE_ARTIFACTS.has(normalized);
+}
+
 async function fetchSpeechBlob(sentence: string, voiceKey?: string): Promise<Blob> {
   const params = new URLSearchParams({ text: sentence });
   if (voiceKey) params.set('voice', voiceKey);
@@ -889,11 +921,16 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
         const { text } = (await res.json()) as { text?: string };
         mark('transcribe_response');
         logDebug(`Transcribed: "${text ?? '(empty)'}"`);
-        if (text && text.trim()) {
-          onUserSpeechRef.current(text.trim());
-        } else {
+        const transcript = text?.trim() ?? '';
+        if (isWhisperSilenceArtifact(transcript)) {
+          // See WHISPER_SILENCE_ARTIFACTS — this is a transcription of
+          // silence, not something the person said, so it must not become
+          // a chat message. Just keep listening.
+          logDebug(`Ignoring "${transcript}" — known transcription-of-silence artifact, not a real message`);
           startListening();
+          return;
         }
+        onUserSpeechRef.current(transcript);
       } catch (err) {
         const isTimeout = err instanceof Error && err.name === 'AbortError';
         logDebug(isTimeout ? 'Transcription timed out after 15s — listening again' : `Transcription error: ${err instanceof Error ? err.message : String(err)}`);
