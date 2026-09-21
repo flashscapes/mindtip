@@ -254,6 +254,18 @@ class VoiceSession {
   // downstream (the Blob's type, and therefore the Content-Type header
   // fetch sends automatically).
   private recordedMimeType = 'audio/webm';
+  // The container's init/header data (WebM's EBML+Segment+Tracks, or
+  // MP4's ftyp+moov) is only ever present in the FIRST chunk MediaRecorder
+  // emits after start() — and start() is only called once for the whole
+  // session (see the class comment), not per turn. Every turn's Blob was
+  // being built from `chunks`, which never contained that header chunk: it
+  // arrives before resumeListening() is ever called (this.active is still
+  // false), and the old ondataavailable handler dropped anything received
+  // while inactive outright. The result was a headerless, structurally
+  // invalid file handed to Groq every single turn — this is what Groq's
+  // "could not process file" error was actually reporting. Captured once,
+  // unconditionally, and explicitly prepended to every turn's Blob below.
+  private headerChunk: Blob | null = null;
   // Small rolling buffer of chunks recorded while speech has not yet been
   // confirmed for the CURRENT turn — see resumeListening()/monitor() for
   // how it's filled, cleared, and consumed. Same pre-roll mechanism as
@@ -351,12 +363,24 @@ class VoiceSession {
     this.opts.onDebug(`MediaRecorder actual negotiated mimeType: "${this.recordedMimeType}"`);
     this.chunks = [];
     this.preRollChunks = [];
+    this.headerChunk = null;
     this.recorder.ondataavailable = (e) => {
+      if (e.data.size === 0) return;
+      // The very first chunk this recorder ever produces, unconditionally
+      // — captured regardless of `active`, since it arrives before
+      // resumeListening() is ever called for turn 1. See the headerChunk
+      // field comment. Not fed into preRoll/chunks; it's prepended
+      // explicitly in finishTurn() instead, exactly once per turn.
+      if (this.headerChunk === null) {
+        this.headerChunk = e.data;
+        this.opts.onDebug(`Captured recorder header chunk: ${e.data.size} bytes`);
+        return;
+      }
       // Dropped outright while not actively listening (AI speaking /
       // processing a turn) — belt-and-suspenders alongside pause()/
       // resume() below, since MediaRecorder.pause() support has had rough
       // edges on some WebKit versions historically.
-      if (e.data.size === 0 || !this.active) return;
+      if (!this.active) return;
       if (this.speaking) {
         this.chunks.push(e.data);
       } else {
@@ -521,8 +545,11 @@ class VoiceSession {
     resetTurnTiming();
     mark('mic_turn_end');
     const durationMs = this.speechStartedAt !== null ? performance.now() - this.speechStartedAt : 0;
-    const chunks = this.chunks;
-    this.opts.onDebug(`Turn finished: ${durationMs.toFixed(0)}ms of speech, ${chunks.length} chunk(s) recorded`);
+    // Prepend the captured header chunk (see the field comment) so this
+    // turn's Blob is a complete, independently-valid file — every prior
+    // turn was missing this, regardless of platform or MIME type.
+    const chunks = this.headerChunk ? [this.headerChunk, ...this.chunks] : this.chunks;
+    this.opts.onDebug(`Turn finished: ${durationMs.toFixed(0)}ms of speech, ${chunks.length} chunk(s) recorded${this.headerChunk ? ' (incl. header)' : ' (NO HEADER CAPTURED)'}`);
     this.pauseListening();
     const blob = new Blob(chunks, { type: this.recordedMimeType });
     mark('capture_finalized');
