@@ -277,7 +277,7 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
             boxShadow: '0 8px 22px rgba(0,0,0,0.35)'
           }}
         >
-          <p className="font-display text-[15px] leading-relaxed text-left" style={{ color: '#F0EEE8' }}>
+          <p className="font-sans text-[15px] leading-relaxed text-left" style={{ color: '#F0EEE8' }}>
             {GREETING_LINE(greeting(), name)}
           </p>
         </div>
