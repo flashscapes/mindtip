@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { Character, Message, UserProfile } from '@/types'
+import { isSupportStyle } from '@/types'
 import { useUserProfile } from '@/features/profile/useUserProfile'
 import { Welcome } from '@/features/welcome/Welcome'
-import { Onboarding } from '@/features/onboarding/Onboarding'
 import { Home } from '@/features/conversation/Home'
 import { Conversation } from '@/features/conversation/Conversation'
 import { Reflection } from '@/features/reflection/Reflection'
@@ -10,7 +10,10 @@ import { unlockAudio } from '@/voice'
 import { STORAGE_KEYS } from '@/lib/constants'
 import { getConversationRecord } from '@/services/conversation/ConversationStore'
 
-type Screen = 'welcome' | 'onboarding' | 'home' | 'conversation' | 'reflection'
+// 'onboarding' is gone: the former three-screen flow was replaced by the
+// two questions the welcome screen now asks in place, so Welcome is what
+// produces the profile. See Welcome.tsx.
+type Screen = 'welcome' | 'home' | 'conversation' | 'reflection'
 
 // Reads back whatever Conversation.tsx last persisted, if anything — see
 // the audit note there. Returns null (not an empty array) when nothing
@@ -49,9 +52,19 @@ export default function App() {
   // directly into it instead of defaulting to Home. Both lazy initializers
   // read the same persisted value once, at startup — never re-evaluated
   // on normal in-app navigation.
+  // A profile saved before the style question existed is complete in every
+  // other respect but has no answer to it, and its stored supportStyle is a
+  // value nothing reads any more. Rather than run on a dead value or
+  // silently pick one for them, send them through the welcome questions
+  // once; handleWelcomeComplete merges the answers over what they already
+  // have, so nothing they told the old flow is lost.
+  const needsWelcome = !profile?.onboardingCompleted || !isSupportStyle(profile.supportStyle)
+
   const [screen, setScreen] = useState<Screen>(() => {
+    // Resuming a live conversation still wins -- interrupting one to ask a
+    // setup question would be worse than asking it on the way out.
     if (profile?.onboardingCompleted && readPersistedConversation()) return 'conversation'
-    return profile?.onboardingCompleted ? 'home' : 'welcome'
+    return needsWelcome ? 'welcome' : 'home'
   })
   const [initialMessage, setInitialMessage] = useState<string | undefined>()
   const [seedMessages, setSeedMessages] = useState<Message[] | undefined>(() => readPersistedConversation() ?? undefined)
@@ -82,8 +95,23 @@ export default function App() {
     }
   }, [character])
 
-  const handleOnboardingComplete = (newProfile: UserProfile) => {
-    saveProfile(newProfile)
+  // Called by Welcome once both of its questions are answered -- it is the
+  // only thing in the app that creates a profile.
+  const handleWelcomeComplete = (newProfile: UserProfile) => {
+    // Merge rather than replace: an existing profile may carry triggers and
+    // whatHelps gathered by the old onboarding flow, plus a stable id the
+    // memory store is keyed on. Only the two things just asked are taken
+    // from the new one.
+    saveProfile(
+      profile
+        ? {
+            ...profile,
+            preferredName: newProfile.preferredName ?? profile.preferredName,
+            supportStyle: newProfile.supportStyle,
+            onboardingCompleted: true
+          }
+        : newProfile
+    )
     setScreen('home')
   }
 
@@ -130,9 +158,7 @@ export default function App() {
 
   let content
   if (screen === 'welcome') {
-    content = <Welcome onComplete={() => setScreen('onboarding')} />
-  } else if (screen === 'onboarding') {
-    content = <Onboarding onComplete={handleOnboardingComplete} />
+    content = <Welcome onComplete={handleWelcomeComplete} />
   } else if (screen === 'reflection' && profile) {
     content = (
       <Reflection
@@ -167,8 +193,9 @@ export default function App() {
   } else if (profile) {
     content = <Home profile={profile} onStart={handleStartConversation} onExploreExperiment={handleContinueFromReflection} />
   } else {
-    // Fallback: no profile somehow reached a screen that needs one.
-    content = <Onboarding onComplete={handleOnboardingComplete} />
+    // Fallback: no profile somehow reached a screen that needs one. Welcome
+    // is where a profile comes from, so that is where this goes.
+    content = <Welcome onComplete={handleWelcomeComplete} />
   }
 
   return content

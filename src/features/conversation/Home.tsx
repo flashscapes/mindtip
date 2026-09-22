@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import type { Character, Message, UserProfile } from '@/types'
-import { unlockAudio } from '@/voice'
+import { useEffect, useRef, useState } from 'react'
+import type { Character, Message, SupportStyle, UserProfile } from '@/types'
+import { speakText, unlockAudio } from '@/voice'
 import { LocalMemoryService } from '@/services/memory/MemoryService'
 import { createExperimentGenerator } from '@/services/experiment'
 import { STORAGE_KEYS } from '@/lib/constants'
@@ -91,8 +91,26 @@ const CHARACTERS = [
 const DEFAULT_ORB_COLORS: readonly [string, string] = ['#A79AE0', '#4A4080']
 const RING_VIEWBOX_W = 572
 const RING_VIEWBOX_H = 810
+// Which characters suit each support style, used only to light the ring
+// after the welcome screen's style question. Deliberately a highlight and
+// never a filter: 'empathetic' matches a single character, so filtering
+// would leave one portrait and wreck the ring's composition -- and the
+// point is to suggest, not to decide for them. Every character stays
+// tappable regardless.
+const STYLE_MATCHES: Record<SupportStyle, string[]> = {
+  analytical: ['poker', 'executive'],
+  empathetic: ['therapist'],
+  big_picture: ['astronaut', 'executive'],
+  tactical: ['noir-detective', 'survivalist']
+}
+
 const ORB_X = 286
 const ORB_Y = 405
+
+// One definition, used for both the on-screen bubble and the spoken line,
+// so the two can never drift apart.
+const GREETING_LINE = (timeOfDay: string, suffix: string) =>
+  `${timeOfDay}${suffix} — please choose a character.`
 
 function greeting(): string {
   const hour = new Date().getHours()
@@ -140,6 +158,27 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
   const [text, setText] = useState('')
   const [experiment, setExperiment] = useState<string | null>(null)
   const name = profile.preferredName ? `, ${profile.preferredName}` : ''
+
+  // Which portraits the welcome screen's style answer points at. Dropped
+  // the moment a character is selected -- see the note in the ring below.
+  const suggested = STYLE_MATCHES[profile.supportStyle] ?? []
+  const suggesting = suggested.length > 0 && selected === null
+
+  // Speak the greeting once per visit to Home. Browsers only allow this
+  // after a real user gesture: arriving from the welcome screen's card tap
+  // (which calls unlockAudio) satisfies that, so it plays. On a cold load
+  // straight to Home it will be blocked, which is why the failure is
+  // swallowed rather than surfaced -- there is nothing the person needs to
+  // do about it, and the line is on screen either way.
+  const greetedRef = useRef(false)
+  useEffect(() => {
+    if (greetedRef.current) return
+    greetedRef.current = true
+    void speakText(GREETING_LINE(greeting(), name)).catch(() => {})
+    // Intentionally once per mount: re-speaking on any state change would
+    // talk over the person while they are choosing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const activeCharacter = CHARACTERS.find(c => c.key === selected)
   const [orbFrom, orbTo] = activeCharacter?.colors ?? DEFAULT_ORB_COLORS
@@ -222,12 +261,26 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
       <p className="relative z-10 font-sans text-[13px] tracking-[0.08em] text-white/80">MindTip</p>
 
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center w-full max-w-sm mx-auto">
-        <h1
-          className="font-sans text-[24px] leading-snug text-white text-center mb-6"
-          style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.04em', textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}
+        {/* Same bubble language as the welcome screen's assistant lines --
+            translucent, blurred, gold hairline, tail bottom-left -- so
+            arriving here reads as that conversation continuing rather than
+            a new screen. Spoken aloud on mount; see the effect above. */}
+        <div
+          className="mb-5 px-4 py-3 mx-auto"
+          style={{
+            maxWidth: 262,
+            background: 'rgba(255,255,255,0.10)',
+            border: '1px solid rgba(232,200,120,0.30)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            borderRadius: '20px 20px 20px 6px',
+            boxShadow: '0 8px 22px rgba(0,0,0,0.35)'
+          }}
         >
-          {greeting()}{name} — who's hearing you out today?
-        </h1>
+          <p className="font-display text-[15px] leading-relaxed text-left" style={{ color: '#F0EEE8' }}>
+            {GREETING_LINE(greeting(), name)}
+          </p>
+        </div>
 
         {/* The portrait art and the label/selection SVG are stacked in one
             shared box, using the image's own native pixel size as the SVG
@@ -287,16 +340,44 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
                 }}
               >
                 <circle cx={character.x} cy={character.y} r="83" fill="transparent" />
+                {/* Style hinting, drawn inside the same <g> so it fades in
+                    with the portrait rather than popping in afterwards.
+                    Suppressed entirely once a character is picked -- at
+                    that point they have decided and the nudge is noise. */}
+                {suggesting && !suggested.includes(character.key) && (
+                  <circle cx={character.x} cy={character.y} r="100" fill="url(#homeStyleDim)" />
+                )}
+                {suggesting && suggested.includes(character.key) && (
+                  <>
+                    <circle
+                      cx={character.x} cy={character.y} r="94" fill="none"
+                      stroke={character.planetColor} strokeWidth="7" opacity="0.16"
+                    />
+                    <circle
+                      cx={character.x} cy={character.y} r="88" fill="none"
+                      stroke={character.planetColor} strokeWidth="2.2" opacity="0.75"
+                    />
+                  </>
+                )}
                 <text
                   x={character.x}
                   y={character.y + character.labelDy}
                   textAnchor="middle"
-                  fontSize={selected === character.key ? 20 : 18}
-                  fontWeight={selected === character.key ? 700 : 400}
-                  fill={selected === character.key ? character.planetColor : '#F5F5FA'}
+                  fontSize={selected === character.key || (suggesting && suggested.includes(character.key)) ? 20 : 18}
+                  fontWeight={selected === character.key ? 700 : suggesting && suggested.includes(character.key) ? 600 : 400}
+                  fill={
+                    selected === character.key || (suggesting && suggested.includes(character.key))
+                      ? character.planetColor
+                      : suggesting
+                        ? 'rgba(245,245,250,0.45)'
+                        : '#F5F5FA'
+                  }
                   style={{
                     transition: 'font-size 0.3s cubic-bezier(0.34,1.56,0.64,1), fill 0.3s',
-                    filter: selected === character.key ? `drop-shadow(0 0 6px ${character.planetColor})` : 'none'
+                    filter:
+                      selected === character.key || (suggesting && suggested.includes(character.key))
+                        ? `drop-shadow(0 0 6px ${character.planetColor})`
+                        : 'none'
                   }}
                 >
                   {character.label}
@@ -317,6 +398,14 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
             </g>
 
             <defs>
+              {/* Soft-edged dim used to sit the non-suggested portraits
+                  back. A flat disc would read as a grey sticker over the
+                  artwork; fading to transparent at the rim keeps it
+                  reading as lighting. */}
+              <radialGradient id="homeStyleDim">
+                <stop offset="78%" stopColor="#05060C" stopOpacity="0.55" />
+                <stop offset="100%" stopColor="#05060C" stopOpacity="0" />
+              </radialGradient>
               <radialGradient id="homeOrbGradient" cx="35%" cy="30%" r="75%">
                 <stop offset="0%" stopColor="#EDE7FA" />
                 <stop offset="45%" stopColor={orbFrom} />

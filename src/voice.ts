@@ -161,7 +161,7 @@ async function fetchSpeechBlob(sentence: string, voiceKey?: string): Promise<Blo
  *  the background — by the time sentence 1 finishes playing, sentence 2 is
  *  very likely already done fetching. Plays strictly in order regardless
  *  of which fetch resolves first. */
-async function speakText(text: string, voiceKey?: string, onDebug?: (msg: string) => void): Promise<void> {
+export async function speakText(text: string, voiceKey?: string, onDebug?: (msg: string) => void): Promise<void> {
   const requestId = ++currentRequestId;
   mark('sentence_ready');
   const sentences = splitIntoSentences(text);

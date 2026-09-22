@@ -2,7 +2,23 @@
 // Kept flat and small on purpose — see README for how this evolves toward
 // a real database schema without breaking these shapes.
 
-export type SupportStyle = 'validate_first' | 'action_first' | 'blend'
+// What kind of perspective helps this person when they're stuck. Chosen on
+// the welcome screen (one tap, four options) and injected into every
+// conversation's prompt by server/prompts/buildContext.ts, where it shapes
+// HOW the chosen character delivers -- never who the character is.
+export type SupportStyle = 'analytical' | 'empathetic' | 'big_picture' | 'tactical'
+
+export const SUPPORT_STYLES: SupportStyle[] = ['analytical', 'empathetic', 'big_picture', 'tactical']
+
+/**
+ * Profiles saved before the style question existed carry a supportStyle
+ * from the old three-value set, which nothing understands any more. This
+ * is how the app recognises one so it can ask the question rather than
+ * silently running on a dead value.
+ */
+export function isSupportStyle(value: unknown): value is SupportStyle {
+  return typeof value === 'string' && (SUPPORT_STYLES as string[]).includes(value)
+}
 
 export interface UserProfile {
   id: string

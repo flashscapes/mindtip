@@ -1,42 +1,67 @@
-import { useMemo, useRef, useState } from 'react'
-import type { Message, UserProfile } from '@/types'
-import { createAIProvider } from '@/services/ai'
-import { useVoiceConversation } from '@/voice'
+import { useEffect, useRef, useState } from 'react'
+import type { SupportStyle, UserProfile } from '@/types'
+import { useVoiceConversation, unlockAudio } from '@/voice'
 
 interface WelcomeProps {
-  onComplete: () => void
+  onComplete: (profile: UserProfile) => void
 }
 
-// The chat that runs here is NOT a route — see the comment above `phase`
-// below. It talks to the same AI service Conversation.tsx uses, which takes
-// a profile as a plain field on its context object. The person has not
-// onboarded yet, so there is no real profile; this stands in for one.
-//
-// It cannot simply be omitted: server/routes/generate.ts rejects a request
-// with no profile (400). Empty arrays are the honest answer here rather than
-// invented preferences — buildContext renders each as "none stated", which
-// is exactly true of someone who has not answered those questions yet.
-const GUEST_PROFILE: UserProfile = {
-  id: 'guest',
-  supportStyle: 'blend',
-  triggers: [],
-  whatHelps: [],
-  whatDoesntHelp: [],
-  proactiveCheckIns: false,
-  onboardedAt: new Date(0).toISOString(),
-  onboardingCompleted: false
+// The two questions asked here are the whole of onboarding now -- the
+// former three-screen flow (name, then two "sky" constellation screens)
+// was removed in favour of asking the only two things that actually get
+// used, in the app's own conversational voice, without leaving this
+// screen. Everything else the app learns, it learns by talking.
+const NAME_QUESTION = 'What should I call you?'
+
+const styleQuestion = (name: string) =>
+  `${name}, when you're working through a tough problem or feeling stuck, what kind of perspective helps you most?`
+
+// Said after the card tap, while the profile is being written and Home is
+// coming up. Deliberately short: the tap already committed them, so this
+// is a handoff, not another question.
+const BRIDGE = "Good. Let's find you a sounding board."
+
+// How long the bridge line stays on screen before Home takes over. Long
+// enough to read, short enough not to feel like a stall.
+const BRIDGE_HOLD_MS = 1500
+
+// The four cards. `key` is written straight to profile.supportStyle and
+// read by server/prompts/buildContext.ts, which turns it into delivery
+// guidance for whichever character gets chosen on Home.
+const STYLE_OPTIONS: { key: SupportStyle; label: string; blurb: string }[] = [
+  { key: 'analytical', label: 'Direct & Analytical', blurb: 'Cut to the problem' },
+  { key: 'empathetic', label: 'Warm & Empathetic', blurb: 'Feel heard first' },
+  { key: 'big_picture', label: 'High-Level & Big Picture', blurb: 'Zoom out on it' },
+  { key: 'tactical', label: 'Unconventional & Tactical', blurb: 'Work the angles' }
+]
+
+// Spoken answers to "what should I call you?" are rarely a bare name --
+// people say "I'm Alvin" or "it's Alvin". Without this the whole sentence
+// becomes preferredName and every screen greets them as "Good morning, My
+// name is Alvin". Typed answers pass through this too and are unaffected,
+// since they almost never carry a prefix.
+const SPOKEN_NAME_PREFIX =
+  /^(?:(?:hi|hey|hello|yeah|yes)[,\s]+)*(?:i'?m|my name is|my name's|it'?s|its|call me|this is|i am)\s+(.+)$/i
+
+function cleanName(raw: string): string {
+  const strip = (s: string) => s.trim().replace(/^[\s,.!?]+|[\s,.!?]+$/g, '')
+  let text = strip(raw)
+  const match = text.match(SPOKEN_NAME_PREFIX)
+  if (match) text = strip(match[1])
+  // A dictated ramble should not become someone's name. Three words is
+  // generous for a real one ("Mary Anne Smith") and still cuts a sentence
+  // off before it can become a greeting.
+  return text.split(/\s+/).slice(0, 3).join(' ').slice(0, 40)
 }
 
-// How many replies the opening chat gives before offering the handoff. Two
-// is deliberate: enough to surface what they are dealing with and what they
-// want from it, not enough to start solving it here -- solving it is what
-// choosing a character is for.
-const EXCHANGES_BEFORE_HANDOFF = 2
+interface Line {
+  id: string
+  role: 'assistant' | 'user'
+  text: string
+}
 
-const OPENING_LINE = "What's on your mind?"
-
-function newMessage(role: Message['role'], content: string): Message {
-  return { id: crypto.randomUUID(), role, content, createdAt: new Date().toISOString() }
+function newLine(role: Line['role'], text: string): Line {
+  return { id: crypto.randomUUID(), role, text }
 }
 
 // A small, decorative "premium" lens-glare accent — a soft bright core plus
@@ -73,77 +98,86 @@ function LensGlare() {
 }
 
 export function Welcome({ onComplete }: WelcomeProps) {
-  const ai = useMemo(() => createAIProvider(), [])
-
-  // 'intro' is the original title block; 'chat' swaps it for the conversation.
-  // Both render into the SAME grid cell (see the .grid below) so the swap is a
-  // cross-fade in place: no route change, no screen change, and the collage,
-  // wash and orb do not move. onComplete is deliberately NOT called here --
-  // it fires only from the handoff button at the end.
+  // 'intro' is the original title block; 'chat' swaps it for the questions.
+  // Both render into the SAME grid cell (see the .grid below) so the swap is
+  // a cross-fade in place: no route change, no screen change, and the
+  // collage, wash and orb do not move.
   const [phase, setPhase] = useState<'intro' | 'chat'>('intro')
-  const [messages, setMessages] = useState<Message[]>([])
+  // Which question is live. 'bridge' is the brief beat after the card tap,
+  // before Home takes over -- nothing is interactive during it.
+  const [step, setStep] = useState<'name' | 'style' | 'bridge'>('name')
+  const [lines, setLines] = useState<Line[]>([])
   const [input, setInput] = useState('')
-  const [isThinking, setIsThinking] = useState(false)
-  const [showHandoff, setShowHandoff] = useState(false)
 
-  // Mirrors `messages` synchronously. The voice path can invoke an older
-  // `send` closure whose captured `messages` is frozen, so history is read
-  // from here instead -- same reason Conversation.tsx keeps one.
-  const messagesRef = useRef<Message[]>([])
-  const isGeneratingRef = useRef(false)
-  const repliesRef = useRef(0)
+  // The voice path can invoke an older callback whose captured state is
+  // frozen, so the step is read from here instead -- same reason
+  // Conversation.tsx keeps a ref alongside its state.
+  const stepRef = useRef<'name' | 'style' | 'bridge'>('name')
+  const nameRef = useRef('')
+  const threadRef = useRef<HTMLDivElement | null>(null)
 
-  const setMessagesAndRef = (updater: (prev: Message[]) => Message[]) => {
-    setMessages(prev => {
-      const next = updater(prev)
-      messagesRef.current = next
-      return next
-    })
-  }
+  // Keep the newest line -- and the cards, which live inside this same
+  // scroll region -- in view. Without this the style question and its cards
+  // sit below the fold on a short phone with no sign they are there.
+  useEffect(() => {
+    const el = threadRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [lines.length, step])
 
-  const send = async (text: string) => {
-    const trimmed = text.trim()
-    if (!trimmed || isGeneratingRef.current) return
-    isGeneratingRef.current = true
+  const say = (role: Line['role'], text: string) => setLines(prev => [...prev, newLine(role, text)])
+
+  const submitName = (raw: string) => {
+    if (stepRef.current !== 'name') return
+    const name = cleanName(raw)
+    if (!name) return
+    nameRef.current = name
     setInput('')
-    setMessagesAndRef(prev => [...prev, newMessage('user', trimmed)])
-    setIsThinking(true)
-
-    try {
-      // The same service call Conversation.tsx makes -- not a second chat
-      // implementation. No character is chosen yet, so this takes the
-      // provider's non-streaming path and the reply arrives whole.
-      const response = await ai.generateResponse({
-        profile: GUEST_PROFILE,
-        relevantMemories: [],
-        recentMessages: messagesRef.current,
-        currentMessage: trimmed
-      })
-      setMessagesAndRef(prev => [...prev, newMessage('assistant', response.replyText)])
-      repliesRef.current += 1
-      if (repliesRef.current >= EXCHANGES_BEFORE_HANDOFF) setShowHandoff(true)
-      void voice.speakResponse(response.replyText)
-    } catch (err) {
-      console.error('Welcome chat generation failed:', err)
-      setMessagesAndRef(prev => [
-        ...prev,
-        newMessage('assistant', "I didn't catch that one. Try me again?")
-      ])
-      // Never strand someone on a dead screen: if the opener fails they can
-      // still move on rather than being stuck tapping a broken orb.
-      setShowHandoff(true)
-    } finally {
-      setIsThinking(false)
-      isGeneratingRef.current = false
-    }
+    say('user', name)
+    stepRef.current = 'style'
+    setStep('style')
+    say('assistant', styleQuestion(name))
+    if (voice.enabled) void voice.speakResponse(styleQuestion(name))
   }
 
-  const voice = useVoiceConversation({ onUserSpeech: send })
+  const pickStyle = (option: (typeof STYLE_OPTIONS)[number]) => {
+    if (stepRef.current !== 'style') return
+    // One tap does everything: answers the question, writes the profile and
+    // moves to Home. It is also a real user gesture landing immediately
+    // before Home mounts, which is what the browser requires before Home's
+    // greeting is allowed to play aloud.
+    unlockAudio()
+    stepRef.current = 'bridge'
+    setStep('bridge')
+    say('user', option.label)
+    say('assistant', BRIDGE)
+    if (voice.enabled) void voice.speakResponse(BRIDGE)
+
+    const profile: UserProfile = {
+      id: crypto.randomUUID(),
+      preferredName: nameRef.current || undefined,
+      supportStyle: option.key,
+      // Not asked any more -- the removed constellation screens collected
+      // these. Empty arrays are the honest answer rather than invented
+      // preferences; buildContext renders each as "none stated", and the
+      // memory service fills them in from real conversation over time.
+      triggers: [],
+      whatHelps: [],
+      whatDoesntHelp: [],
+      proactiveCheckIns: false,
+      onboardedAt: new Date().toISOString(),
+      onboardingCompleted: true
+    }
+    window.setTimeout(() => onComplete(profile), BRIDGE_HOLD_MS)
+  }
+
+  // Only the name question can be answered by voice; the style question is
+  // answered by tapping a card.
+  const voice = useVoiceConversation({ onUserSpeech: submitName })
 
   const handleOrbTap = () => {
     if (phase === 'intro') {
       setPhase('chat')
-      setMessagesAndRef(() => [newMessage('assistant', OPENING_LINE)])
+      say('assistant', NAME_QUESTION)
       return
     }
     // In chat, the orb is the voice trigger. enableVoiceConversation must run
@@ -234,17 +268,22 @@ export function Welcome({ onComplete }: WelcomeProps) {
             <div className="flex flex-col w-full max-w-[280px] mx-auto">
               {/* The thread scrolls within the title block's footprint, so a
                   growing conversation never pushes the orb off-screen. */}
+              {/* The cards scroll WITH the thread rather than sitting below
+                  it: four cards are about 240px, which on a short phone
+                  pushed the orb and its caption off the bottom of the
+                  screen. One bounded region can never do that. */}
               <div
+                ref={threadRef}
                 className="flex flex-col gap-2.5 overflow-y-auto pr-1"
-                style={{ maxHeight: '34vh' }}
+                style={{ maxHeight: step === 'name' ? '34vh' : '46vh' }}
                 aria-live="polite"
               >
-                {messages.map(m => (
+                {lines.map(l => (
                   <p
-                    key={m.id}
+                    key={l.id}
                     className="font-display text-[15px] leading-relaxed px-4 py-3"
                     style={
-                      m.role === 'user'
+                      l.role === 'user'
                         ? {
                             alignSelf: 'flex-end',
                             textAlign: 'right',
@@ -267,61 +306,68 @@ export function Welcome({ onComplete }: WelcomeProps) {
                           }
                     }
                   >
-                    {m.content}
+                    {l.text}
                   </p>
                 ))}
-                {isThinking && (
-                  <p className="font-display italic text-[14px] self-start" style={{ color: 'rgba(240,238,232,0.7)' }}>
-                    Thinking…
-                  </p>
+                {/* One tap answers and advances -- there is deliberately no
+                    confirm step and no separate continue button. */}
+                {step === 'style' && (
+                  <div className="flex flex-col gap-2 mt-4">
+                    {STYLE_OPTIONS.map(option => (
+                      <button
+                        key={option.key}
+                        onClick={() => pickStyle(option)}
+                        className="flex flex-col gap-0.5 text-left px-3.5 py-2.5 transition-transform duration-200 hover:-translate-y-0.5"
+                        style={{
+                          background: 'rgba(255,255,255,0.08)',
+                          border: '1px solid rgba(232,200,120,0.32)',
+                          borderRadius: 16,
+                          backdropFilter: 'blur(10px)',
+                          WebkitBackdropFilter: 'blur(10px)',
+                          boxShadow: '0 6px 18px rgba(0,0,0,0.30)'
+                        }}
+                      >
+                        <span className="font-display text-[14px] leading-tight" style={{ color: '#F0EEE8' }}>
+                          {option.label}
+                        </span>
+                        <span className="text-[11px] leading-tight" style={{ color: 'rgba(240,238,232,0.62)' }}>
+                          {option.blurb}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
 
-              <form
-                onSubmit={e => {
-                  e.preventDefault()
-                  void send(input)
-                }}
-                className="flex items-center gap-2 mt-3.5 pb-2"
-                style={{ borderBottom: '1px solid rgba(232,200,120,0.35)' }}
-              >
-                <input
-                  id="welcome-chat-input"
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  placeholder="Type here, or tap the orb and talk"
-                  className="flex-1 bg-transparent outline-none font-display text-[14px]"
-                  style={{ color: '#F0EEE8' }}
-                  aria-label="Message"
-                />
-                <button
-                  type="submit"
-                  disabled={!input.trim()}
-                  className="disabled:opacity-40"
-                  style={{ fontFamily: "'Bebas Neue', sans-serif", color: '#E8C878', fontSize: 14, letterSpacing: '0.08em' }}
-                >
-                  SEND
-                </button>
-              </form>
-
-              {/* Offered, never forced: the conversation is not interrupted or
-                  auto-advanced, so nobody gets pulled off the screen
-                  mid-thought. Tapping this is the only thing that leaves. */}
-              {showHandoff && (
-                <button
-                  onClick={onComplete}
-                  className="mt-4 rounded-full transition-transform duration-300 hover:-translate-y-0.5"
-                  style={{
-                    border: '1.5px solid #D4A94A',
-                    background: 'rgba(10,14,20,0.6)',
-                    padding: '10px 20px'
+              {step === 'name' && (
+                <form
+                  onSubmit={e => {
+                    e.preventDefault()
+                    submitName(input)
                   }}
+                  className="flex items-center gap-2 mt-3.5 pb-2"
+                  style={{ borderBottom: '1px solid rgba(232,200,120,0.35)' }}
                 >
-                  <span style={{ fontFamily: "'Bebas Neue', sans-serif", color: '#E8C878', fontSize: 14, letterSpacing: '0.08em' }}>
-                    CHOOSE WHO YOU TALK TO →
-                  </span>
-                </button>
+                  <input
+                    id="welcome-chat-input"
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    placeholder="Type here, or tap the orb and talk"
+                    className="flex-1 bg-transparent outline-none font-display text-[14px]"
+                    style={{ color: '#F0EEE8' }}
+                    aria-label="Your name"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!input.trim()}
+                    className="disabled:opacity-40"
+                    style={{ fontFamily: "'Bebas Neue', sans-serif", color: '#E8C878', fontSize: 14, letterSpacing: '0.08em' }}
+                  >
+                    SEND
+                  </button>
+                </form>
               )}
+
             </div>
           </div>
         </div>
