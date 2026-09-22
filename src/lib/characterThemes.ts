@@ -167,13 +167,22 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
   },
   survivalist: {
     font: "'Oswald', sans-serif",
+    // Photographic moonlit forest road in place of the painted glacier
+    // scene. Two things had to give for this: the GlacierPeaks illustration
+    // is opaque and carries a warm sun, which would both hide the photo and
+    // contradict a night scene, so `atmosphere` is dropped here (restoring
+    // it is just re-adding that one line). And the source's snow sits at
+    // mean luminance ~135 against near-white text, so the asset itself has
+    // its highlights pulled down hard and is tinted into these same arctic
+    // blues -- flat darkening would have turned the treeline to mud. Scrim
+    // values below are the ones the asset was checked against, including a
+    // worst-case check of white text inside the translucent ice bubble.
     background:
-      'radial-gradient(circle at 72% 32%, rgba(255,216,160,0.18), transparent 30%), ' +
-      'linear-gradient(180deg, #0B1826 0%, #16324A 35%, #3E6B85 62%, #7FA8B8 100%)',
+      'linear-gradient(180deg, rgba(10,22,36,0.45) 0%, rgba(10,22,36,0.30) 35%, rgba(10,22,36,0.45) 70%, rgba(10,22,36,0.72) 100%), ' +
+      "url('/images/survivalist-night-bg.jpg') center 45% / cover no-repeat",
     textColor: '#F5FAFD',
     placeholderColor: 'rgba(245,250,253,0.4)',
     accentColor: '#A8CBDC',
-    atmosphere: 'arctic',
     bubbles: {
       assistantBg: 'rgba(255,255,255,0.16)',
       assistantText: '#F5FAFD',
