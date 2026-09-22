@@ -132,7 +132,7 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
     // reads as depth of field instead of a stretched low-res image. Scrim
     // opacities here match the ones the asset was checked against.
     background:
-      'linear-gradient(180deg, rgba(8,14,26,0.62) 0%, rgba(8,14,26,0.42) 30%, rgba(8,14,26,0.50) 70%, rgba(8,14,26,0.80) 100%), ' +
+      'linear-gradient(180deg, rgba(8,14,26,0.55) 0%, rgba(8,14,26,0.34) 30%, rgba(8,14,26,0.42) 70%, rgba(8,14,26,0.74) 100%), ' +
       "url('/images/executive-bg.jpg') center 40% / cover no-repeat",
     textColor: '#E6ECF4',
     placeholderColor: 'rgba(230,236,244,0.4)',
