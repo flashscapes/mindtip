@@ -17,13 +17,17 @@ const styleQuestion = (name: string) =>
   `${name}, when you're working through a tough problem or feeling stuck, what kind of perspective helps you most?`
 
 // Said after the card tap, while the profile is being written and Home is
-// coming up. Deliberately short: the tap already committed them, so this
-// is a handoff, not another question.
-const BRIDGE = "Good. Let's find you a sounding board."
+// coming up. It names what the answer is for -- a handoff that says the
+// choice landed, rather than a generic transition.
+const BRIDGE = "Good, I'll consider that going forward."
 
-// How long the bridge line stays on screen before Home takes over. Long
-// enough to read, short enough not to feel like a stall.
-const BRIDGE_HOLD_MS = 1500
+// Home takes over once the bridge line has actually finished being spoken,
+// not on a fixed timer -- a timer cut it off mid-sentence and left it
+// unreadable. The floor keeps it on screen long enough to read when speech
+// is unavailable; the ceiling means a hung or slow TTS request can never
+// strand someone on this line.
+const BRIDGE_MIN_HOLD_MS = 1200
+const BRIDGE_MAX_HOLD_MS = 9000
 
 // The four cards. `key` is written straight to profile.supportStyle and
 // read by server/prompts/buildContext.ts, which turns it into delivery
@@ -159,7 +163,6 @@ export function Welcome({ onComplete }: WelcomeProps) {
     setStep('bridge')
     say('user', option.label)
     say('assistant', BRIDGE)
-    if (voice.enabled) void voice.speakResponse(BRIDGE)
 
     const profile: UserProfile = {
       id: crypto.randomUUID(),
@@ -176,7 +179,22 @@ export function Welcome({ onComplete }: WelcomeProps) {
       onboardedAt: new Date().toISOString(),
       onboardingCompleted: true
     }
-    window.setTimeout(() => onComplete(profile), BRIDGE_HOLD_MS)
+    void (async () => {
+      // speakResponse handles the mic; speakText is the plain path for when
+      // the mic was refused earlier and voice never came up. Audio is
+      // already unlocked either way -- unlockAudio ran on this same tap.
+      const spoken = voice.enabled
+        ? voice.speakResponse(BRIDGE).catch(() => {})
+        : speakText(BRIDGE).catch(() => {})
+      const floor = new Promise(resolve => window.setTimeout(resolve, BRIDGE_MIN_HOLD_MS))
+      const ceiling = new Promise(resolve => window.setTimeout(resolve, BRIDGE_MAX_HOLD_MS))
+      await Promise.all([floor, Promise.race([spoken, ceiling])])
+      // Nothing on this screen listens any more, and Home opens its own
+      // audio. Leaving the mic live across the handoff would keep the
+      // wake lock held for a screen that has no use for it.
+      voice.disableVoiceConversation()
+      onComplete(profile)
+    })()
   }
 
   // Only the name question can be answered by voice; the style question is
