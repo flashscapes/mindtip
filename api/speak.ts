@@ -62,6 +62,34 @@ const CARTESIA_VOICES: Record<string, CartesiaVoiceConfig> = {
   }
 };
 
+// Per-key OpenAI voices, used for any key with no Cartesia entry above.
+//
+// 'custom' is the character the user types in themselves, and it wants a
+// resonant broadcast voice that suits whoever they named. It is routed to
+// OpenAI rather than Cartesia on purpose: every Cartesia ID above is
+// already spoken for, so reusing one would make an invented character
+// sound exactly like the Poker Player or the Therapist, and Cartesia's
+// library could not be reached from here to pick an unused one. 'onyx' is
+// OpenAI's deep announcer voice and, being a different engine entirely,
+// cannot collide with any existing character's timbre.
+//
+// To move this to a purpose-picked Cartesia voice later, add a 'custom'
+// entry to CARTESIA_VOICES above -- it takes precedence automatically and
+// nothing else needs to change.
+const OPENAI_VOICES: Record<string, string> = {
+  custom: 'onyx'
+};
+
+const DEFAULT_OPENAI_VOICE = 'shimmer';
+
+// Used only when a Cartesia request fails and the key has no OpenAI voice
+// of its own -- a deep, neutral stand-in rather than the light default.
+const CARTESIA_FALLBACK: CartesiaVoiceConfig = {
+  voiceId: '5ee9feff-1265-424a-9d7f-8e4d431a12c7', // Ronald - Thinker: "intense, deep young adult male"
+  speed: 0.94,
+  emotion: 'determined'
+};
+
 async function speakWithCartesia(text: string, config: CartesiaVoiceConfig): Promise<Buffer> {
   const res = await fetch('https://api.cartesia.ai/tts/bytes', {
     method: 'POST',
@@ -90,7 +118,7 @@ async function speakWithCartesia(text: string, config: CartesiaVoiceConfig): Pro
   return Buffer.from(await res.arrayBuffer());
 }
 
-async function speakWithOpenAI(text: string): Promise<Buffer> {
+async function speakWithOpenAI(text: string, voice: string = DEFAULT_OPENAI_VOICE): Promise<Buffer> {
   const res = await fetch('https://api.openai.com/v1/audio/speech', {
     method: 'POST',
     headers: {
@@ -99,7 +127,7 @@ async function speakWithOpenAI(text: string): Promise<Buffer> {
     },
     body: JSON.stringify({
       model: 'tts-1',
-      voice: 'shimmer',
+      voice,
       input: text,
       response_format: 'mp3'
     })
@@ -127,11 +155,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  const cartesiaConfig = CARTESIA_VOICES[voiceKey];
+  const openaiVoice = OPENAI_VOICES[voiceKey] ?? DEFAULT_OPENAI_VOICE;
+
+  // Two engines, either order, with the unused one as a fallback. A single
+  // engine meant one missing or rejected key turned into a 500 and total
+  // silence in the conversation -- which reads as the app being broken,
+  // not as a voice being unavailable. A different-sounding reply is a far
+  // better failure than no reply at all.
+  const primary = cartesiaConfig
+    ? () => speakWithCartesia(text, cartesiaConfig)
+    : () => speakWithOpenAI(text, openaiVoice);
+  const fallback = cartesiaConfig
+    ? () => speakWithOpenAI(text, openaiVoice)
+    : () => speakWithCartesia(text, CARTESIA_FALLBACK);
+
   try {
-    const cartesiaConfig = CARTESIA_VOICES[voiceKey];
-    const audioBuffer = cartesiaConfig
-      ? await speakWithCartesia(text, cartesiaConfig)
-      : await speakWithOpenAI(text);
+    let audioBuffer: Buffer;
+    try {
+      audioBuffer = await primary();
+    } catch (primaryErr) {
+      console.error('Primary TTS engine failed, falling back:', primaryErr);
+      audioBuffer = await fallback();
+    }
 
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Cache-Control', 'no-store');

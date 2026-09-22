@@ -165,6 +165,38 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
       borderWidth: 1
     }
   },
+  // The character the user types in themselves. It has no fixed identity,
+  // so the theme stays neutral rather than committing to a look that would
+  // contradict half of what people name: a quiet road heading somewhere,
+  // and the Therapist's bubbles, which are the calmest and least
+  // character-specific in the app. Those bubbles are copied deliberately,
+  // not shared by reference -- the Therapist's own theme should be free to
+  // change without silently redressing this one.
+  custom: {
+    font: "'Inter', sans-serif",
+    // Source is a 728x910 original cropped to a tall 0.55 frame centred on
+    // the road, then enlarged ~1.7x. Highlights are compressed before the
+    // overall darkening: the lit green midground is what competes with
+    // text, and flat darkening would have crushed the already-dark ridge
+    // into a black mass and lost the depth of the shot. Scrim values below
+    // are the ones the asset was checked against, including the assistant
+    // bubble's fill (luminance 25) against its 226 text.
+    background:
+      'linear-gradient(180deg, rgba(8,14,10,0.50) 0%, rgba(8,14,10,0.22) 30%, rgba(8,14,10,0.38) 70%, rgba(8,14,10,0.80) 100%), ' +
+      "url('/images/custom-bg.jpg') center 45% / cover no-repeat",
+    textColor: '#EDE3D0',
+    placeholderColor: 'rgba(237,227,208,0.4)',
+    accentColor: '#D9B67A',
+    bubbles: {
+      assistantBg: 'linear-gradient(160deg, rgba(42,34,28,0.9), rgba(20,16,13,0.94))',
+      assistantText: '#EDE3D0',
+      assistantBorder: 'rgba(217,182,122,0.6)',
+      userBg: 'linear-gradient(160deg, #E8C896, #C9A05C)',
+      userText: '#2A1E10',
+      userBorder: 'rgba(217,182,122,0.85)',
+      timestampColor: '#D9B67A'
+    }
+  },
   survivalist: {
     font: "'Oswald', sans-serif",
     // Photographic moonlit snowfield in place of the painted glacier
