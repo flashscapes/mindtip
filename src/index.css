@@ -114,3 +114,27 @@ body {
   background-repeat: repeat;
   background-size: 200px 200px;
 }
+
+/* Welcome screen entry orb — a slow breath rather than a blink: scale and
+   glow move together so it reads as alive and tappable without nagging.
+   Paired with the caption beneath it, this replaced the old NEXT pill. */
+@keyframes mindtip-welcome-orb {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 0 0 rgba(124,134,240,0.34),
+      0 0 22px 4px rgba(124,134,240,0.26),
+      0 0 46px 12px rgba(124,134,240,0.13);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow:
+      0 0 0 12px rgba(124,134,240,0),
+      0 0 34px 9px rgba(124,134,240,0.42),
+      0 0 72px 22px rgba(124,134,240,0.20);
+  }
+}
+.mindtip-welcome-orb { animation: mindtip-welcome-orb 2.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .mindtip-welcome-orb { animation: none; }
+}
