@@ -167,7 +167,7 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
   },
   survivalist: {
     font: "'Oswald', sans-serif",
-    // Photographic moonlit forest road in place of the painted glacier
+    // Photographic moonlit snowfield in place of the painted glacier
     // scene. Two things had to give for this: the GlacierPeaks illustration
     // is opaque and carries a warm sun, which would both hide the photo and
     // contradict a night scene, so `atmosphere` is dropped here (restoring
