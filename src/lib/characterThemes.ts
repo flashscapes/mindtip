@@ -126,7 +126,14 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
     // casual, without needing a custom bubble shape.
     font: "'Inter', sans-serif",
     fontWeight: 500,
-    background: 'linear-gradient(170deg, #0E1622 0%, #1A2942 45%, #2B3E5E 100%)',
+    // Night financial-district skyline. The source photo is small, so it is
+    // pre-cropped to portrait and very slightly blurred in the asset itself
+    // rather than left to the browser to enlarge raw -- at phone size it
+    // reads as depth of field instead of a stretched low-res image. Scrim
+    // opacities here match the ones the asset was checked against.
+    background:
+      'linear-gradient(180deg, rgba(8,14,26,0.62) 0%, rgba(8,14,26,0.42) 30%, rgba(8,14,26,0.50) 70%, rgba(8,14,26,0.80) 100%), ' +
+      "url('/images/executive-bg.jpg') center 40% / cover no-repeat",
     textColor: '#E6ECF4',
     placeholderColor: 'rgba(230,236,244,0.4)',
     accentColor: '#B8C4D4',
