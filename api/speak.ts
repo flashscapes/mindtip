@@ -45,9 +45,14 @@ const CARTESIA_VOICES: Record<string, CartesiaVoiceConfig> = {
     speed: 0.97,
     emotion: 'contemplative'
   },
-  infantry: {
+  executive: {
+    // Reusing the verified voice ID freed up by the retired infantry
+    // character rather than guessing an untested one — a wrong ID fails
+    // synthesis outright. "Matter-of-fact" suits concise business advice,
+    // and it is clearly distinct from the therapist's warmer Nolan. Swap
+    // for a more polished voice from the Cartesia library if desired.
     voiceId: '87286a8d-7ea7-4235-a41a-dd9fa6630feb', // Henry - Plainspoken Guy: "youthful... monotone, matter-of-fact attitude"
-    speed: 1.02,
+    speed: 1.03, // slightly brisk — he respects your time
     emotion: 'determined'
   },
   survivalist: {

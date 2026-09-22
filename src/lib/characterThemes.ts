@@ -16,7 +16,7 @@ export interface BubbleTheme {
   shape?: 'ice' | 'hud'
   // The little fedora glyph next to assistant messages was previously
   // unconditional whenever bubbles was set at all, showing up incongruously
-  // next to infantry/survivalist/astronaut messages too -- noir-detective
+  // next to survivalist/astronaut/executive messages too -- noir-detective
   // is the only character it was actually designed for.
   icon?: 'fedora'
   assistantBorder?: string
@@ -43,7 +43,7 @@ export interface CharacterTheme {
   textColor?: string
   placeholderColor?: string
   accentColor?: string
-  atmosphere?: 'noir' | 'arctic' | 'camp' | 'orbit'
+  atmosphere?: 'noir' | 'arctic' | 'orbit'
   bubbles?: BubbleTheme
   inkColors?: InkColors
   lineHeight?: number
@@ -119,22 +119,25 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
       timestampColor: '#E8C878'
     }
   },
-  infantry: {
-    font: "'Big Shoulders Stencil Text', sans-serif",
-    fontWeight: 700,
-    background:
-      'linear-gradient(180deg, #232A1B 0%, #3A4128 30%, #6B6538 55%, #A88A52 75%, #C9A868 100%)',
-    textColor: '#E8E4D0',
-    placeholderColor: 'rgba(232,228,208,0.4)',
-    accentColor: '#B8C89A',
-    atmosphere: 'camp',
+  executive: {
+    // Inter is already loaded for the app's own UI, so this adds no new
+    // font request — and a clean modern sans is the right register here
+    // anyway. Tight corner radii read as precise/corporate rather than
+    // casual, without needing a custom bubble shape.
+    font: "'Inter', sans-serif",
+    fontWeight: 500,
+    background: 'linear-gradient(170deg, #0E1622 0%, #1A2942 45%, #2B3E5E 100%)',
+    textColor: '#E6ECF4',
+    placeholderColor: 'rgba(230,236,244,0.4)',
+    accentColor: '#B8C4D4',
     bubbles: {
-      assistantBg: 'linear-gradient(160deg, #4A5638, #2A3320)',
-      assistantText: '#E8E4D0',
-      userBg: 'linear-gradient(160deg, #A8985E, #7A6A3E)',
-      userText: '#1C2116',
-      timestampColor: 'rgba(184,200,154,0.75)',
-      borderRadius: 8,
+      assistantBg: 'linear-gradient(160deg, rgba(38,56,86,0.92), rgba(20,32,52,0.95))',
+      assistantText: '#E6ECF4',
+      assistantBorder: 'rgba(184,196,212,0.35)',
+      userBg: 'linear-gradient(160deg, #B8C4D4, #8494A8)',
+      userText: '#0E1622',
+      timestampColor: 'rgba(184,196,212,0.75)',
+      borderRadius: 6,
       tailRadius: 2
     }
   },

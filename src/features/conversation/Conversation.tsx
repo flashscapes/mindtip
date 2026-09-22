@@ -14,7 +14,6 @@ import { getConversationRecord, saveConversationRecord } from '@/services/conver
 import { CHARACTER_THEMES } from '@/lib/characterThemes'
 import { NoirSkyline } from './NoirSkyline'
 import { GlacierPeaks } from './GlacierPeaks'
-import { InfantryCamp } from './InfantryCamp'
 import { AstronautOrbit } from './AstronautOrbit'
 
 interface ConversationProps {
@@ -544,7 +543,6 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
         </>
       )}
       {theme?.atmosphere === 'arctic' && <GlacierPeaks />}
-      {theme?.atmosphere === 'camp' && <InfantryCamp />}
       {theme?.atmosphere === 'orbit' && <AstronautOrbit />}
       <header className="relative flex items-center justify-between px-8 py-6" style={{ borderBottom: `1px solid ${theme?.accentColor ? theme.accentColor + '33' : 'rgba(37,56,58,0.08)'}` }}>
         <span className="font-sans text-[13px] tracking-[0.08em]" style={{ color: theme?.accentColor ?? '#345350' }}>MindTip</span>
