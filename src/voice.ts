@@ -1037,14 +1037,18 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
    *  persistent mic/AudioContext/recorder pipeline for the whole
    *  conversation — everything after this is lightweight state
    *  transitions within that same session, not new mic sessions. */
-  const enableVoiceConversation = useCallback(async () => {
+  // Returns whether the mic actually came up. Callers that need to know --
+  // the welcome screen speaks its opening question either way, and must
+  // fall back to plain playback when the mic was refused -- can branch on
+  // it; every existing caller ignores it, as before.
+  const enableVoiceConversation = useCallback(async (): Promise<boolean> => {
     logDebug('Enabling voice: unlocking audio…');
     unlockAudio();
     micLostRef.current = false;
     const myGeneration = ++initGenerationRef.current;
     const session = new VoiceSession(makeSessionOptions());
     const result = await attemptInit(session, myGeneration);
-    if (myGeneration !== initGenerationRef.current) return; // superseded while initializing
+    if (myGeneration !== initGenerationRef.current) return false; // superseded while initializing
     if (result.status !== 'ok') {
       if (result.status === 'timeout') {
         logDebug('Mic init timed out after 10s');
@@ -1053,7 +1057,7 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
         const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
         logDebug(`Mic init failed: ${detail}`);
       }
-      return;
+      return false;
     }
     sessionRef.current = session;
     enabledRef.current = true;
@@ -1061,6 +1065,7 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
     logDebug('Voice enabled — persistent mic session started');
     void requestWakeLock();
     startListening();
+    return true;
   }, [startListening]);
 
   const disableVoiceConversation = useCallback(() => {

@@ -110,7 +110,7 @@ const ORB_Y = 405
 // One definition, used for both the on-screen bubble and the spoken line,
 // so the two can never drift apart.
 const GREETING_LINE = (timeOfDay: string, suffix: string) =>
-  `${timeOfDay}${suffix} — please choose a character.`
+  `${timeOfDay}${suffix}. Please choose a character.`
 
 function greeting(): string {
   const hour = new Date().getHours()

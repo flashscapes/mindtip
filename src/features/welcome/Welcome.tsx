@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SupportStyle, UserProfile } from '@/types'
-import { useVoiceConversation, unlockAudio } from '@/voice'
+import { speakText, useVoiceConversation, unlockAudio } from '@/voice'
 
 interface WelcomeProps {
   onComplete: (profile: UserProfile) => void
@@ -126,6 +126,15 @@ export function Welcome({ onComplete }: WelcomeProps) {
 
   const say = (role: Line['role'], text: string) => setLines(prev => [...prev, newLine(role, text)])
 
+  // The thread is capped by the space between the title block and the orb,
+  // and the style question plus four cards does not fit alongside the name
+  // exchange on a short phone -- the question's first line ends up scrolled
+  // out of view. The name exchange is what gives way, because the style
+  // question already opens with their name ("Alvin, when you're...") and
+  // that confirms it was heard correctly better than an echoed bubble does.
+  const visibleLines =
+    step === 'name' ? lines : step === 'style' ? lines.slice(-1) : lines.slice(-2)
+
   const submitName = (raw: string) => {
     if (stepRef.current !== 'name') return
     const name = cleanName(raw)
@@ -178,6 +187,24 @@ export function Welcome({ onComplete }: WelcomeProps) {
     if (phase === 'intro') {
       setPhase('chat')
       say('assistant', NAME_QUESTION)
+      // This tap is the one real user gesture available, and both things
+      // that need one happen inside it: Safari only grants the mic from a
+      // gesture, and audio playback is only unlocked by one. So the mic is
+      // opened here rather than on a second tap -- the question is asked
+      // aloud and the answer can be spoken straight back.
+      void (async () => {
+        const micReady = await voice.enableVoiceConversation()
+        if (micReady) {
+          // speakResponse pauses the mic while it plays and resumes
+          // listening 250ms after it finishes, so the question is never
+          // heard as the answer.
+          void voice.speakResponse(NAME_QUESTION)
+        } else {
+          // Mic refused or failed to start. The question should still be
+          // asked out loud -- they can answer by typing instead.
+          void speakText(NAME_QUESTION).catch(() => {})
+        }
+      })()
       return
     }
     // In chat, the orb is the voice trigger. enableVoiceConversation must run
@@ -275,13 +302,20 @@ export function Welcome({ onComplete }: WelcomeProps) {
               <div
                 ref={threadRef}
                 className="flex flex-col gap-2.5 overflow-y-auto pr-1"
-                style={{ maxHeight: step === 'name' ? '34vh' : '46vh' }}
+                style={{
+                  // Fill exactly the gap between the title block's top edge
+                  // and the orb rather than a fixed fraction of the screen:
+                  // 33vh is the spacer above, 135px the orb and its caption
+                  // below. A fixed vh either wasted space on a tall phone or
+                  // ran past the orb on a short one.
+                  maxHeight: step === 'name' ? '34vh' : 'calc(100dvh - 33vh - 135px)'
+                }}
                 aria-live="polite"
               >
-                {lines.map(l => (
+                {visibleLines.map(l => (
                   <p
                     key={l.id}
-                    className="font-display text-[15px] leading-relaxed px-4 py-3"
+                    className="font-sans text-[15px] leading-relaxed px-4 py-3"
                     style={
                       l.role === 'user'
                         ? {
@@ -327,7 +361,7 @@ export function Welcome({ onComplete }: WelcomeProps) {
                           boxShadow: '0 6px 18px rgba(0,0,0,0.30)'
                         }}
                       >
-                        <span className="font-display text-[14px] leading-tight" style={{ color: '#F0EEE8' }}>
+                        <span className="font-sans text-[14px] leading-tight" style={{ color: '#F0EEE8' }}>
                           {option.label}
                         </span>
                         <span className="text-[11px] leading-tight" style={{ color: 'rgba(240,238,232,0.62)' }}>
@@ -353,7 +387,7 @@ export function Welcome({ onComplete }: WelcomeProps) {
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     placeholder="Type here, or tap the orb and talk"
-                    className="flex-1 bg-transparent outline-none font-display text-[14px]"
+                    className="flex-1 bg-transparent outline-none font-sans text-[14px]"
                     style={{ color: '#F0EEE8' }}
                     aria-label="Your name"
                   />
