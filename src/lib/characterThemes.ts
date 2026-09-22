@@ -26,6 +26,16 @@ export interface BubbleTheme {
   // a whole new shape variant. Undefined keeps the existing look exactly.
   borderRadius?: number
   tailRadius?: number
+  // Frosted-glass amount, in px, for the plain shape. Only worth setting
+  // when the bubble background is actually translucent and the theme has a
+  // photo behind it -- over an opaque fill it does nothing visible.
+  blur?: number
+  // Replaces the default hairline shadow on the plain shape. Unlike that
+  // default it applies whether or not the bubble has a border, so a
+  // borderless bubble can still lift off the background.
+  shadow?: string
+  // Hairline weight for the plain shape's border, default 1.5px.
+  borderWidth?: number
 }
 
 // For themes that render as plain text rather than bubbles (see the
@@ -126,26 +136,33 @@ export const CHARACTER_THEMES: Record<string, CharacterTheme> = {
     // casual, without needing a custom bubble shape.
     font: "'Inter', sans-serif",
     fontWeight: 500,
-    // Night financial-district skyline. The source photo is small, so it is
-    // pre-cropped to portrait and very slightly blurred in the asset itself
-    // rather than left to the browser to enlarge raw -- at phone size it
-    // reads as depth of field instead of a stretched low-res image. Scrim
-    // opacities here match the ones the asset was checked against.
+    // Foggy blue-hour street corner. The asset is pre-cropped to a tall
+    // 0.62 frame rather than 3:4: `cover` on a narrow phone keeps about 81%
+    // of a 0.62 frame's width but only ~66% of a 3:4 one, which would slice
+    // the corner building in half. Source is a real 1290x1624 original, so
+    // this is a downscale -- no enlargement, and no blur needed to hide one.
+    // Scrim opacities here match the ones the asset was checked against.
     background:
-      'linear-gradient(180deg, rgba(8,14,26,0.55) 0%, rgba(8,14,26,0.34) 30%, rgba(8,14,26,0.42) 70%, rgba(8,14,26,0.74) 100%), ' +
+      'linear-gradient(180deg, rgba(8,14,26,0.60) 0%, rgba(8,14,26,0.40) 30%, rgba(8,14,26,0.48) 70%, rgba(8,14,26,0.78) 100%), ' +
       "url('/images/executive-bg.jpg') center 40% / cover no-repeat",
     textColor: '#E6ECF4',
     placeholderColor: 'rgba(230,236,244,0.4)',
     accentColor: '#B8C4D4',
     bubbles: {
-      assistantBg: 'linear-gradient(160deg, rgba(38,56,86,0.92), rgba(20,32,52,0.95))',
+      // Translucent rather than near-opaque so the frosted blur below has
+      // something to work with -- the city lights read faintly through the
+      // glass, which is where most of the "premium" feel comes from.
+      assistantBg: 'linear-gradient(160deg, rgba(42,62,96,0.62), rgba(18,30,50,0.68))',
       assistantText: '#E6ECF4',
-      assistantBorder: 'rgba(184,196,212,0.35)',
-      userBg: 'linear-gradient(160deg, #B8C4D4, #8494A8)',
-      userText: '#0E1622',
+      assistantBorder: 'rgba(200,214,232,0.28)',
+      userBg: 'linear-gradient(160deg, #E6ECF4, #AFBFD2)',
+      userText: '#0C1420',
       timestampColor: 'rgba(184,196,212,0.75)',
-      borderRadius: 6,
-      tailRadius: 2
+      borderRadius: 22,
+      tailRadius: 8,
+      blur: 14,
+      shadow: '0 10px 28px rgba(0,0,0,0.38)',
+      borderWidth: 1
     }
   },
   survivalist: {

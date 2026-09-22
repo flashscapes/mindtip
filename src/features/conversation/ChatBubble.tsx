@@ -131,7 +131,22 @@ export function ChatBubble({
                     borderBottomRightRadius: isUser ? plainTailRadius : undefined,
                     borderBottomLeftRadius: !isUser ? plainTailRadius : undefined,
                     ...(hudBorder
-                      ? { border: `1.5px solid ${hudBorder}`, boxShadow: `0 2px 10px ${hudBorder}33` }
+                      ? { border: `${bubbles.borderWidth ?? 1.5}px solid ${hudBorder}` }
+                      : {}),
+                    // A theme-supplied shadow applies with or without a
+                    // border, so a borderless bubble can still lift off the
+                    // background; the old hairline glow stays the default
+                    // for the themes that were built against it.
+                    ...(bubbles.shadow
+                      ? { boxShadow: bubbles.shadow }
+                      : hudBorder
+                        ? { boxShadow: `0 2px 10px ${hudBorder}33` }
+                        : {}),
+                    ...(bubbles.blur
+                      ? {
+                          backdropFilter: `blur(${bubbles.blur}px)`,
+                          WebkitBackdropFilter: `blur(${bubbles.blur}px)`
+                        }
                       : {})
                   }
                 : {}),
