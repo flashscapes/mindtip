@@ -3,6 +3,7 @@ import type { Character, Message, UserProfile } from '@/types'
 import { createAIProvider } from '@/services/ai'
 import { StreamingResponseError } from '@/services/ai/AIProvider'
 import { LocalMemoryService } from '@/services/memory/MemoryService'
+import { promoteMemoriesIntoProfile } from '@/features/profile/learnedProfile'
 import { createMemoryExtractor } from '@/services/memory'
 import { SafetyService } from '@/services/safety/SafetyService'
 import { useVoiceConversation } from '@/voice'
@@ -28,6 +29,12 @@ interface ConversationProps {
   // (rather than seedMessages/initialMessage) is what triggers a natural
   // check-in on mount instead of the generic first message.
   reentryContext?: Message[]
+  // Called when this conversation taught the app something durable enough
+  // to belong in every future prompt -- see learnedProfile.ts. App owns the
+  // profile, so the updated copy goes back up rather than being saved from
+  // here: two useUserProfile instances would leave React state and
+  // localStorage disagreeing.
+  onProfileLearned?: (profile: UserProfile) => void
   // When true, hands-free voice is enabled before the first message is
   // sent — used when the user arrives here via the Home mood check-in,
   // which already unlocked audio playback during its own tap.
@@ -57,7 +64,7 @@ function withHardTimeout<T>(promise: Promise<T>, ms: number, label: string): Pro
   ])
 }
 
-export function Conversation({ profile, initialMessage, seedMessages, reentryContext, autoEnableVoice, character, onReflectionReady, onExit }: ConversationProps) {
+export function Conversation({ profile, initialMessage, seedMessages, reentryContext, autoEnableVoice, character, onProfileLearned, onReflectionReady, onExit }: ConversationProps) {
   const ai = useMemo(() => createAIProvider(), [])
   const memory = useMemo(() => new LocalMemoryService(), [])
   const memoryExtractor = useMemo(() => createMemoryExtractor(), [])
@@ -458,6 +465,18 @@ export function Conversation({ profile, initialMessage, seedMessages, reentryCon
       localStorage.setItem('mindtip_extraction_debug', `Extraction FAILED: ${msg}`)
       console.error('Memory extraction failed:', err)
     }
+
+    // Triggers and strategies are the facts that should hold for this
+    // person in every conversation, not only the turns whose wording
+    // happens to match them -- so they are copied up into the profile,
+    // which buildContext renders unconditionally. Everything else the
+    // extractor finds stays in memory alone.
+    //
+    // Outside the try on purpose: this reads memories that are already
+    // stored, so an extractor outage should not also stop facts captured
+    // in earlier conversations from reaching the profile.
+    const learned = promoteMemoriesIntoProfile(profile, memory.getAll())
+    if (learned) onProfileLearned?.(learned)
   }
 
   const handleExit = () => {

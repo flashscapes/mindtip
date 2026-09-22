@@ -177,6 +177,7 @@ export default function App() {
         reentryContext={reentryContext}
         autoEnableVoice={autoVoiceStart}
         character={character}
+        onProfileLearned={saveProfile}
         onReflectionReady={handleReflectionReady}
         onExit={() => {
           setInitialMessage(undefined)
