@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { SupportStyle, UserProfile } from '@/types'
 import { speakText, useVoiceConversation, unlockAudio } from '@/voice'
 import { APP_VOICE_KEY } from '@/lib/constants'
+import { cleanName, isPlausibleName } from './nameFromSpeech'
 
 interface WelcomeProps {
   onComplete: (profile: UserProfile) => void
@@ -53,25 +54,6 @@ const STYLE_OPTIONS: { key: SupportStyle; label: string; blurb: string }[] = [
   { key: 'big_picture', label: 'High-Level & Big Picture', blurb: 'Zoom out on it' },
   { key: 'tactical', label: 'Unconventional & Tactical', blurb: 'Work the angles' }
 ]
-
-// Spoken answers to "what should I call you?" are rarely a bare name --
-// people say "I'm Alvin" or "it's Alvin". Without this the whole sentence
-// becomes preferredName and every screen greets them as "Good morning, My
-// name is Alvin". Typed answers pass through this too and are unaffected,
-// since they almost never carry a prefix.
-const SPOKEN_NAME_PREFIX =
-  /^(?:(?:hi|hey|hello|yeah|yes)[,\s]+)*(?:i'?m|my name is|my name's|it'?s|its|call me|this is|i am)\s+(.+)$/i
-
-function cleanName(raw: string): string {
-  const strip = (s: string) => s.trim().replace(/^[\s,.!?]+|[\s,.!?]+$/g, '')
-  let text = strip(raw)
-  const match = text.match(SPOKEN_NAME_PREFIX)
-  if (match) text = strip(match[1])
-  // A dictated ramble should not become someone's name. Three words is
-  // generous for a real one ("Mary Anne Smith") and still cuts a sentence
-  // off before it can become a greeting.
-  return text.split(/\s+/).slice(0, 3).join(' ').slice(0, 40)
-}
 
 interface Line {
   id: string
@@ -171,7 +153,7 @@ export function Welcome({ onComplete }: WelcomeProps) {
   const submitName = (raw: string) => {
     if (stepRef.current !== 'name') return
     const name = cleanName(raw)
-    if (!name) {
+    if (!isPlausibleName(name)) {
       // Nothing else resumes listening from here, so returning silently
       // left the screen dead with the mic idle. Asking again re-opens it,
       // because speakResponse starts listening when it finishes.
@@ -233,7 +215,13 @@ export function Welcome({ onComplete }: WelcomeProps) {
 
   // Only the name question can be answered by voice; the style question is
   // answered by tapping a card.
-  const voice = useVoiceConversation({ onUserSpeech: submitName })
+  // Tells /api/transcribe that this turn is a name, so Whisper is prompted
+  // to expect a proper noun rather than conversational vocabulary. Cleared
+  // once the name is in, since the style question is answered by tapping.
+  const voice = useVoiceConversation({
+    onUserSpeech: submitName,
+    transcriptionContext: step === 'name' ? 'name' : undefined
+  })
 
   const handleOrbTap = () => {
     if (phase === 'intro') {

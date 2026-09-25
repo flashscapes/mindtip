@@ -61,7 +61,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // auto-detection entirely, and a short context prompt biases decoding
     // toward the kind of vocabulary this app actually hears.
     formData.append('language', 'en');
-    formData.append('prompt', 'A reflective conversation about feelings, relationships, work, and daily life.');
+    // Whisper's prompt biases decoding toward the vocabulary it describes.
+    // The conversational prompt below is right for a conversation and
+    // actively wrong for a name: it steers a one-syllable clip toward
+    // ordinary words, which is how "Al" came back as "Ow" and "Flash" as
+    // "Splash". A name turn says so via ?context=name and gets a prompt
+    // that expects a proper noun on its own. Deliberately no example names
+    // -- Whisper biases toward tokens that appear in the prompt, so listing
+    // any would tilt every future name toward those.
+    const context = typeof req.query.context === 'string' ? req.query.context : '';
+    formData.append(
+      'prompt',
+      context === 'name'
+        ? 'The speaker says only their own name and nothing else. It may be a short, uncommon, or shortened name.'
+        : 'A reflective conversation about feelings, relationships, work, and daily life.'
+    );
+    // Whisper falls back to progressively higher temperatures when it is
+    // unsure, which is exactly when it invents a plausible-sounding word in
+    // place of an unfamiliar one. Pinning it to 0 keeps the most likely
+    // decoding instead of a creative one.
+    formData.append('temperature', '0');
 
     const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',

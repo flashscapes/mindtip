@@ -710,6 +710,10 @@ interface WakeLockSentinelLike {
 
 interface UseVoiceConversationOptions {
   onUserSpeech: (transcript: string) => void;
+  /** What this turn is expected to contain, passed to /api/transcribe so it
+   *  can prompt Whisper appropriately. Currently only 'name'. Read fresh on
+   *  every turn, so a screen can change it as its own state moves on. */
+  transcriptionContext?: string;
 }
 
 /**
@@ -719,7 +723,7 @@ interface UseVoiceConversationOptions {
  *   voice.speakResponse(aiResponseText); // call whenever you get a new AI reply
  *   // voice.state is 'idle' | 'speaking' | 'listening' | 'transcribing'
  */
-export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptions) {
+export function useVoiceConversation({ onUserSpeech, transcriptionContext }: UseVoiceConversationOptions) {
   const [state, setState] = useState<ConversationState>('idle');
   const [enabled, setEnabled] = useState(false);
   const [debugLog, setDebugLog] = useState<string[]>([]);
@@ -828,6 +832,8 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
   // via this effect) means every turn calls whatever `onUserSpeech` the
   // caller most recently passed in, instead of freezing on whichever
   // version existed at the moment voice was enabled.
+  const transcriptionContextRef = useRef(transcriptionContext);
+  transcriptionContextRef.current = transcriptionContext;
   const onUserSpeechRef = useRef(onUserSpeech);
   useEffect(() => {
     onUserSpeechRef.current = onUserSpeech;
@@ -911,7 +917,9 @@ export function useVoiceConversation({ onUserSpeech }: UseVoiceConversationOptio
       const timeoutId = setTimeout(() => controller.abort(), 15000);
       try {
         mark('transcribe_request_start');
-        const res = await fetch('/api/transcribe', { method: 'POST', body: blob, signal: controller.signal });
+        const context = transcriptionContextRef.current;
+        const url = context ? `/api/transcribe?context=${encodeURIComponent(context)}` : '/api/transcribe';
+        const res = await fetch(url, { method: 'POST', body: blob, signal: controller.signal });
         if (!res.ok) {
           const body = await res.text().catch(() => '');
           logDebug(`Transcribe failed: HTTP ${res.status} — ${body.slice(0, 200)}`);
