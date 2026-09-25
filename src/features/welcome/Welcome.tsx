@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SupportStyle, UserProfile } from '@/types'
 import { speakText, useVoiceConversation, unlockAudio } from '@/voice'
+import { APP_VOICE_KEY } from '@/lib/constants'
 
 interface WelcomeProps {
   onComplete: (profile: UserProfile) => void
@@ -13,10 +14,10 @@ interface WelcomeProps {
 // screen. Everything else the app learns, it learns by talking.
 const NAME_QUESTION = 'What should I call you?'
 
-// Everything this screen says is spoken in the app's own voice, which is
-// warm and male -- see the 'welcome' entry in api/speak.ts. Passing no key
-// at all is what made these lines come out in OpenAI's light default.
-const WELCOME_VOICE = 'welcome'
+// Everything this screen says is spoken in the app's own voice -- see the
+// 'welcome' entry in api/speak.ts. Passing no key at all is what made
+// these lines come out in OpenAI's light default.
+const WELCOME_VOICE = APP_VOICE_KEY
 
 // Said when the transcript came back as something that is not a name.
 const NAME_RETRY = "Sorry, I didn't catch that. What should I call you?"

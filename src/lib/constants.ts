@@ -26,3 +26,9 @@ export const UNHELPFUL_OPTIONS = [
   'Meditation', 'Breathing exercises', 'Long explanations',
   'Motivational quotes', 'Too many questions'
 ]
+
+// The app's own speaking voice, used by the screens that come before any
+// character has been chosen: the welcome questions and Home's greeting.
+// Resolved in api/speak.ts. Kept here so the two screens cannot drift --
+// Home previously passed no key at all and silently got the light default.
+export const APP_VOICE_KEY = 'welcome'

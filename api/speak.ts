@@ -70,8 +70,14 @@ const CARTESIA_VOICES: Record<string, CartesiaVoiceConfig> = {
   // unused one. The overlap with the Astronaut is not heard back to back:
   // the welcome is over before anyone meets him.
   welcome: {
-    voiceId: '23e9e50a-4ea2-447b-b589-df90dbb848a2', // Dallas - Fireside Friend: "kind male for inviting and authentic conversations"
-    speed: 0.96,
+    // Swapped from Dallas, which was warm but read too light. This is the
+    // only voice in the library above whose description says "deep", which
+    // is what a baritone needs; the slower speed takes the edge off its
+    // "intense" and adds gravitas. Every option here already belongs to a
+    // character -- Cartesia's library is unreachable from this environment
+    // to pick an unused one -- so some overlap is unavoidable.
+    voiceId: '5ee9feff-1265-424a-9d7f-8e4d431a12c7', // Ronald - Thinker: "intense, deep young adult male"
+    speed: 0.94,
     emotion: 'contemplative'
   }
 };
@@ -91,7 +97,14 @@ const CARTESIA_VOICES: Record<string, CartesiaVoiceConfig> = {
 // entry to CARTESIA_VOICES above -- it takes precedence automatically and
 // nothing else needs to change.
 const OPENAI_VOICES: Record<string, string> = {
-  custom: 'onyx'
+  custom: 'onyx',
+  // Not the light default. Without this line, any Cartesia hiccup on the
+  // welcome/Home lines fell back to 'shimmer' -- reintroducing the exact
+  // voice these screens were changed to get away from, intermittently and
+  // for no visible reason. With it, no path on those screens produces a
+  // female voice, which also makes "I still hear the old voice" diagnostic:
+  // it means a stale cached bundle, not a misconfiguration.
+  welcome: 'onyx'
 };
 
 const DEFAULT_OPENAI_VOICE = 'shimmer';

@@ -3,7 +3,7 @@ import type { Character, Message, SupportStyle, UserProfile } from '@/types'
 import { speakText, unlockAudio } from '@/voice'
 import { LocalMemoryService } from '@/services/memory/MemoryService'
 import { createExperimentGenerator } from '@/services/experiment'
-import { STORAGE_KEYS } from '@/lib/constants'
+import { APP_VOICE_KEY, STORAGE_KEYS } from '@/lib/constants'
 
 interface HomeProps {
   profile: UserProfile
@@ -174,7 +174,7 @@ export function Home({ profile, onStart, onExploreExperiment }: HomeProps) {
   useEffect(() => {
     if (greetedRef.current) return
     greetedRef.current = true
-    void speakText(GREETING_LINE(greeting(), name)).catch(() => {})
+    void speakText(GREETING_LINE(greeting(), name), APP_VOICE_KEY).catch(() => {})
     // Intentionally once per mount: re-speaking on any state change would
     // talk over the person while they are choosing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
