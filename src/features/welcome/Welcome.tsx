@@ -13,6 +13,20 @@ interface WelcomeProps {
 // screen. Everything else the app learns, it learns by talking.
 const NAME_QUESTION = 'What should I call you?'
 
+// Everything this screen says is spoken in the app's own voice, which is
+// warm and male -- see the 'welcome' entry in api/speak.ts. Passing no key
+// at all is what made these lines come out in OpenAI's light default.
+const WELCOME_VOICE = 'welcome'
+
+// Said when the transcript came back as something that is not a name.
+const NAME_RETRY = "Sorry, I didn't catch that. What should I call you?"
+
+// Said when the mic could not be opened. The text input is already on
+// screen at this point; this is what points them at it, instead of
+// leaving a spoken question hanging with nothing listening.
+const MIC_UNAVAILABLE = "I can't reach your mic right now. Type your name below instead."
+
+
 const styleQuestion = (name: string) =>
   `${name}, when you're working through a tough problem or feeling stuck, what kind of perspective helps you most?`
 
@@ -112,6 +126,9 @@ export function Welcome({ onComplete }: WelcomeProps) {
   const [step, setStep] = useState<'name' | 'style' | 'bridge'>('name')
   const [lines, setLines] = useState<Line[]>([])
   const [input, setInput] = useState('')
+  // True once the mic has been asked for and refused or failed. Drives the
+  // orb caption so a dead mic is visible rather than silent.
+  const [micUnavailable, setMicUnavailable] = useState(false)
 
   // The voice path can invoke an older callback whose captured state is
   // frozen, so the step is read from here instead -- same reason
@@ -130,6 +147,17 @@ export function Welcome({ onComplete }: WelcomeProps) {
 
   const say = (role: Line['role'], text: string) => setLines(prev => [...prev, newLine(role, text)])
 
+  // speakResponse pauses the mic while it plays and resumes listening when
+  // it finishes; speakText is the plain path for when voice never came up.
+  // Going through one helper means no line can accidentally be added to the
+  // thread without also being spoken, and none can be spoken in the wrong
+  // voice.
+  const speakLine = (text: string): Promise<void> =>
+    (voice.enabled
+      ? voice.speakResponse(text, WELCOME_VOICE)
+      : speakText(text, WELCOME_VOICE)
+    ).catch(() => {})
+
   // The thread is capped by the space between the title block and the orb,
   // and the style question plus four cards does not fit alongside the name
   // exchange on a short phone -- the question's first line ends up scrolled
@@ -142,14 +170,21 @@ export function Welcome({ onComplete }: WelcomeProps) {
   const submitName = (raw: string) => {
     if (stepRef.current !== 'name') return
     const name = cleanName(raw)
-    if (!name) return
+    if (!name) {
+      // Nothing else resumes listening from here, so returning silently
+      // left the screen dead with the mic idle. Asking again re-opens it,
+      // because speakResponse starts listening when it finishes.
+      say('assistant', NAME_RETRY)
+      void speakLine(NAME_RETRY)
+      return
+    }
     nameRef.current = name
     setInput('')
     say('user', name)
     stepRef.current = 'style'
     setStep('style')
     say('assistant', styleQuestion(name))
-    if (voice.enabled) void voice.speakResponse(styleQuestion(name))
+    void speakLine(styleQuestion(name))
   }
 
   const pickStyle = (option: (typeof STYLE_OPTIONS)[number]) => {
@@ -183,9 +218,7 @@ export function Welcome({ onComplete }: WelcomeProps) {
       // speakResponse handles the mic; speakText is the plain path for when
       // the mic was refused earlier and voice never came up. Audio is
       // already unlocked either way -- unlockAudio ran on this same tap.
-      const spoken = voice.enabled
-        ? voice.speakResponse(BRIDGE).catch(() => {})
-        : speakText(BRIDGE).catch(() => {})
+      const spoken = speakLine(BRIDGE)
       const floor = new Promise(resolve => window.setTimeout(resolve, BRIDGE_MIN_HOLD_MS))
       const ceiling = new Promise(resolve => window.setTimeout(resolve, BRIDGE_MAX_HOLD_MS))
       await Promise.all([floor, Promise.race([spoken, ceiling])])
@@ -212,27 +245,60 @@ export function Welcome({ onComplete }: WelcomeProps) {
       // aloud and the answer can be spoken straight back.
       void (async () => {
         const micReady = await voice.enableVoiceConversation()
-        if (micReady) {
-          // speakResponse pauses the mic while it plays and resumes
-          // listening 250ms after it finishes, so the question is never
-          // heard as the answer.
-          void voice.speakResponse(NAME_QUESTION)
-        } else {
-          // Mic refused or failed to start. The question should still be
-          // asked out loud -- they can answer by typing instead.
-          void speakText(NAME_QUESTION).catch(() => {})
+        setMicUnavailable(!micReady)
+        // Spoken either way. speakLine routes through speakResponse when
+        // the mic is up, which resumes listening once the question ends, so
+        // the answer can be given straight back.
+        await speakLine(NAME_QUESTION)
+        if (!micReady) {
+          // Previously this just left a spoken question hanging with
+          // nothing listening and no explanation -- indistinguishable from
+          // the app freezing.
+          say('assistant', MIC_UNAVAILABLE)
+          void speakLine(MIC_UNAVAILABLE)
         }
       })()
       return
     }
-    // In chat, the orb is the voice trigger. enableVoiceConversation must run
-    // from a real tap -- Safari only grants the mic from a user gesture.
-    if (!voice.enabled) void voice.enableVoiceConversation()
-    else voice.disableVoiceConversation()
+    // Safari only re-grants a lost mic from a real user gesture, which is
+    // what this tap is. Without this branch the orb called disable() here,
+    // because `enabled` is still true after the stream drops -- turning the
+    // one gesture that could recover the mic into the one that gave up on
+    // it.
+    if (voice.state === 'mic-lost') {
+      void voice.resumeAfterMicLoss()
+      return
+    }
+    // Otherwise the orb is the voice toggle. enableVoiceConversation must
+    // also run from a real tap, for the same reason.
+    if (!voice.enabled) {
+      void voice.enableVoiceConversation().then(ok => setMicUnavailable(!ok))
+    } else {
+      voice.disableVoiceConversation()
+    }
   }
 
   const orbLabel =
-    phase === 'intro' ? 'Tap to begin' : voice.enabled ? 'Stop talking' : 'Tap and talk'
+    phase === 'intro'
+      ? 'Tap to begin'
+      : voice.state === 'mic-lost'
+        ? 'Tap to resume listening'
+        : voice.enabled
+          ? 'Stop talking'
+          : 'Tap and talk'
+
+  // The caption reports the real voice state rather than a guess at it. A
+  // stall used to look identical to listening; now "hung" is a state you
+  // can read off the screen.
+  const orbCaption = (): string => {
+    if (phase === 'intro') return 'TAP TO BEGIN.'
+    if (voice.state === 'mic-lost') return 'TAP TO RESUME'
+    if (micUnavailable) return 'TYPE BELOW'
+    if (voice.state === 'speaking') return 'SPEAKING…'
+    if (voice.state === 'transcribing') return 'GOT IT…'
+    if (voice.state === 'listening') return 'LISTENING…'
+    return voice.enabled ? 'ONE MOMENT…' : 'TAP AND TALK'
+  }
 
   return (
     <div
@@ -442,7 +508,7 @@ export function Welcome({ onComplete }: WelcomeProps) {
           }}
         />
         <span style={{ fontFamily: "'Bebas Neue', sans-serif", color: '#E8C878', fontSize: 13, letterSpacing: '0.13em' }}>
-          {phase === 'intro' ? 'TAP TO BEGIN.' : voice.enabled ? 'LISTENING…' : 'TAP AND TALK'}
+          {orbCaption()}
         </span>
       </div>
     </div>

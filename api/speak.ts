@@ -59,6 +59,20 @@ const CARTESIA_VOICES: Record<string, CartesiaVoiceConfig> = {
     voiceId: 'db69127a-dbaf-4fa9-b425-2fe67680c348', // Clint - Rugged Actor: "raspy voice with rugged tone"
     speed: 0.95,
     emotion: 'determined'
+  },
+  // The app's own voice on the welcome screen, before any character has
+  // been chosen. It previously had no entry here at all, so it fell all
+  // the way through to OpenAI's light 'shimmer' default -- a cold first
+  // impression, and the wrong register for the question it asks.
+  //
+  // Reuses Dallas, the warmest male voice already verified in this file,
+  // because Cartesia's library could not be reached from here to pick an
+  // unused one. The overlap with the Astronaut is not heard back to back:
+  // the welcome is over before anyone meets him.
+  welcome: {
+    voiceId: '23e9e50a-4ea2-447b-b589-df90dbb848a2', // Dallas - Fireside Friend: "kind male for inviting and authentic conversations"
+    speed: 0.96,
+    emotion: 'contemplative'
   }
 };
 
